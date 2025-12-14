@@ -1,0 +1,24 @@
+# Build artifacts
+*.gem
+build.log
+/rdkit/
+/rdkit_chem/
+
+# Local dev environment
+.tool-versions
+
+# Ruby/Bundler
+*.bundle
+.bundle/
+vendor/bundle/
+Gemfile.lock
+
+# IDE
+.idea/
+*.swp
+*.swo
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

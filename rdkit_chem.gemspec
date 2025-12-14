@@ -1,24 +1,46 @@
-# -*- encoding: utf-8 -*-
-# stub: rdkit_chem 2020.04.30.1 ruby lib
-# stub: ext/rdkit_chem/extconf.rb
+# frozen_string_literal: true
+
+require_relative 'lib/rdkit_chem/version'
 
 Gem::Specification.new do |s|
-  s.name = "rdkit_chem".freeze
-  s.version = "2020.04.30.1"
+  s.name        = 'rdkit_chem'
+  s.version     = RDKitChem::GEMVERSION
+  s.authors     = ['An Nguyen']
+  s.email       = ['caman.nguyenthanh@gmail.com']
+  s.homepage    = 'https://github.com/CamAnNguyen/rdkit-chem'
+  s.summary     = 'Ruby gem for RDKit'
+  s.description = 'Ruby bindings for RDKit cheminformatics library'
+  s.license     = 'BSD-3-Clause'
 
-  s.required_rubygems_version = Gem::Requirement.new(">= 0".freeze) if s.respond_to? :required_rubygems_version=
-  s.require_paths = ["lib".freeze]
-  s.authors = ["An Nguyen".freeze]
-  s.date = "2019-07-15"
-  s.description = "RDKit as a GEM".freeze
-  s.email = ["annguyen@kit.edu".freeze]
-  s.extensions = ["ext/rdkit_chem/extconf.rb".freeze]
-  s.files = ["Rakefile".freeze, "ext/rdkit_chem/extconf.rb".freeze, "lib/rdkit_chem.rb".freeze, "lib/rdkit_chem/version.rb".freeze, "test/test_rdkit_chem.rb".freeze]
-  s.homepage = "https://github.com/CamAnNguyen/rdkit-chem".freeze
-  s.licenses = ["BSD".freeze]
-  s.rubygems_version = "2.7.11".freeze
-  s.summary = "Ruby gem for RDKit !".freeze
-  s.test_files = ["test/test_rdkit_chem.rb".freeze]
+  s.required_ruby_version = '>= 2.7.0'
 
-  s.installed_by_version = "2.7.11" if s.respond_to? :installed_by_version
+  s.files = Dir[
+    'lib/**/*.rb',
+    'ext/**/*',
+    'Code/**/*',
+    'CMakeLists.txt',
+    'Rakefile',
+    'README.md',
+    'LICENSE'
+  ]
+
+  # Platform-specific gems include pre-compiled binaries
+  # Source gems use the extension for compilation
+  ruby_version_dir = "#{RUBY_VERSION.split('.')[0..1].join('.')}.0"
+  precompiled_dir = File.join(__dir__, 'lib', 'rdkit_chem', ruby_version_dir)
+
+  if ENV['RDKIT_PRECOMPILED'] || File.directory?(precompiled_dir)
+    # Pre-compiled binary gem - include the native libraries
+    s.files += Dir["lib/rdkit_chem/#{ruby_version_dir}/**/*"]
+    s.platform = Gem::Platform::CURRENT
+  else
+    # Source gem - requires compilation during install
+    s.extensions = ['ext/rdkit_chem/extconf.rb']
+  end
+
+  s.require_paths = ['lib']
+  s.test_files    = Dir['test/**/*']
+
+  s.add_development_dependency 'rake', '~> 13.0'
+  s.add_development_dependency 'test-unit', '~> 3.0'
 end
