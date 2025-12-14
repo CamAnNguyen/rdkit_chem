@@ -10,6 +10,12 @@ require 'rdkit_chem/version'
 VERSION = RDKitChem::GEMVERSION
 NATIVE_DIR = 'rdkit_chem/lib'
 
+# System libraries that need to be bundled for portability
+BUNDLED_SYSTEM_LIBS = %w[
+  libboost_serialization.so*
+  libboost_iostreams.so*
+].freeze
+
 desc 'Run tests'
 Rake::TestTask.new(:test) do |t|
   t.libs << 'lib'
@@ -67,6 +73,40 @@ task :build_native do
   FileUtils.rm_rf(target_dir)
 
   puts "\nBuilt: rdkit_chem-#{VERSION}-#{Gem::Platform.local}.gem"
+end
+
+desc 'Bundle system libraries (Boost) into native directory'
+task :bundle_system_libs do
+  so_file = File.join(NATIVE_DIR, 'RDKitChem.so')
+  unless File.exist?(so_file)
+    abort "ERROR: #{so_file} not found"
+  end
+
+  puts "Finding and bundling system library dependencies..."
+
+  # Find library paths using ldd
+  ldd_output = `ldd #{so_file} 2>/dev/null`
+
+  BUNDLED_SYSTEM_LIBS.each do |lib_pattern|
+    lib_name = lib_pattern.gsub('*', '')
+    # Extract actual library path from ldd output
+    match = ldd_output.match(/#{Regexp.escape(lib_name)}[^\s]* => ([^\s]+)/)
+    if match
+      src_path = match[1]
+      if File.exist?(src_path)
+        dest = File.join(NATIVE_DIR, File.basename(src_path))
+        unless File.exist?(dest)
+          FileUtils.cp(src_path, dest, verbose: true)
+        else
+          puts "Already exists: #{dest}"
+        end
+      end
+    else
+      puts "WARNING: Could not find #{lib_pattern} in ldd output"
+    end
+  end
+
+  puts "Done bundling system libraries."
 end
 
 desc 'Apply RPATH fix to existing native extension (no recompile needed)'
