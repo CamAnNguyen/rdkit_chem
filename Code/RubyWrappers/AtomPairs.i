@@ -40,51 +40,52 @@
 %include <DataStructs/BitVects.h>
 %include <DataStructs/SparseIntVect.h>
 
-%rename(eq) RDKit::SparseIntVect<boost::uint32_t>::operator==;
-%rename(ne) RDKit::SparseIntVect<boost::uint32_t>::operator!=;
-%rename(eq) RDKit::SparseIntVect<boost::int32_t>::operator==;
-%rename(ne) RDKit::SparseIntVect<boost::int32_t>::operator!=;
-%rename(eq) RDKit::SparseIntVect<boost::int64_t>::operator==;
-%rename(ne) RDKit::SparseIntVect<boost::int64_t>::operator!=;
+// Use base types (int/unsigned int) instead of boost::int32_t/uint32_t to avoid
+// duplicate swig::traits definitions (boost types are typedefs to base types)
+%rename(eq) RDKit::SparseIntVect<unsigned int>::operator==;
+%rename(ne) RDKit::SparseIntVect<unsigned int>::operator!=;
+%rename(eq) RDKit::SparseIntVect<int>::operator==;
+%rename(ne) RDKit::SparseIntVect<int>::operator!=;
+// SparseIntVect<long long> operators removed - Ruby SWIG lacks swig::traits for long long int
 
-%template(SparseIntVectu32) RDKit::SparseIntVect<boost::uint32_t>;
-%template(SparseIntVect32) RDKit::SparseIntVect<boost::int32_t>;
-%template(SparseIntVect64) RDKit::SparseIntVect<boost::int64_t>;
+%template(SparseIntVectu32) RDKit::SparseIntVect<unsigned int>;
+%template(SparseIntVect32) RDKit::SparseIntVect<int>;
+// SparseIntVect64 removed - Ruby SWIG lacks swig::traits for long long int
 
-%ignore RDKit::SparseIntVect<boost::uint32_t>::getNonzeroElements const;
-%ignore RDKit::SparseIntVect<boost::int32_t>::getNonzeroElements const;
-%ignore RDKit::SparseIntVect<boost::int64_t>::getNonzeroElements const;
+%ignore RDKit::SparseIntVect<unsigned int>::getNonzeroElements const;
+%ignore RDKit::SparseIntVect<int>::getNonzeroElements const;
 
-%extend RDKit::SparseIntVect<boost::uint32_t> {
-  std::vector<std::pair<boost::uint32_t, int> > getNonzero() const{
-    std::vector<std::pair<boost::uint32_t, int> > res;
-    for(std::map<boost::uint32_t,int>::const_iterator es=$self->getNonzeroElements().begin();
+%extend RDKit::SparseIntVect<unsigned int> {
+  std::vector<std::pair<unsigned int, int> > getNonzero() const{
+    std::vector<std::pair<unsigned int, int> > res;
+    for(std::map<unsigned int,int>::const_iterator es=$self->getNonzeroElements().begin();
         es!=$self->getNonzeroElements().end();++es){
-      res.push_back(std::make_pair((boost::uint32_t)es->first,(int)es->second));
+      res.push_back(std::make_pair((unsigned int)es->first,(int)es->second));
     }
     return res;
   }
 }
-%extend RDKit::SparseIntVect<boost::int32_t> {
-  std::vector<std::pair<boost::int32_t, int> > getNonzero() const{
-    std::vector<std::pair<boost::int32_t, int> > res;
-    for(std::map<boost::int32_t,int>::const_iterator es=$self->getNonzeroElements().begin();
+%extend RDKit::SparseIntVect<int> {
+  std::vector<std::pair<int, int> > getNonzero() const{
+    std::vector<std::pair<int, int> > res;
+    for(std::map<int,int>::const_iterator es=$self->getNonzeroElements().begin();
         es!=$self->getNonzeroElements().end();++es){
-      res.push_back(std::make_pair((boost::int32_t)es->first,(int)es->second));
+      res.push_back(std::make_pair((int)es->first,(int)es->second));
     }
     return res;
   }
 }
-%extend RDKit::SparseIntVect<boost::int64_t> {
-  std::vector<std::pair<boost::int64_t, int> > getNonzero() const{
-    std::vector<std::pair<boost::int64_t, int> > res;
-    for(std::map<boost::int64_t,int>::const_iterator es=$self->getNonzeroElements().begin();
-        es!=$self->getNonzeroElements().end();++es){
-      res.push_back(std::make_pair((boost::int64_t)es->first,(int)es->second));
-    }
-    return res;
-  }
-}
+// getNonzero for SparseIntVect<boost::int64_t> removed - Ruby SWIG lacks swig::traits for long long int
+// %extend RDKit::SparseIntVect<boost::int64_t> {
+//   std::vector<std::pair<boost::int64_t, int> > getNonzero() const{
+//     std::vector<std::pair<boost::int64_t, int> > res;
+//     for(std::map<boost::int64_t,int>::const_iterator es=$self->getNonzeroElements().begin();
+//         es!=$self->getNonzeroElements().end();++es){
+//       res.push_back(std::make_pair((boost::int64_t)es->first,(int)es->second));
+//     }
+//     return res;
+//   }
+// }
 %newobject getAtomPairFingerprint;
 %newobject getHashedAtomPairFingerprint;
 %newobject getHashedAtomPairFingerprintAsBitVect;

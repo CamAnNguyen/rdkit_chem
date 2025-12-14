@@ -53,10 +53,14 @@
 /* Suppress the unimportant warnings */
 #pragma SWIG nowarn=503,516
 
+// Ignore ostream operators globally - they cause redefinition errors and aren't useful in Ruby
+%ignore operator<<;
+
 %include <boost_shared_ptr.i>
 %{
     #include <boost/shared_ptr.hpp>
     #include <boost/shared_array.hpp>
+    #include <ForceField/UFF/Params.h>
 %}
 // The actual definition isn't in the top level hpp file!
 // The next two lines are to work around a problem caused by the fact that older versions of
@@ -69,6 +73,7 @@
 %include <boost/smart_ptr/shared_array.hpp>
 
 /* undefine RDKIT_<LIBNAME>_EXPORT macros */
+%include <RDGeneral/RDExportMacros.h>
 %include <RDGeneral/export.h>
 /* Include the base types before anything that will utilize them */
 #ifdef SWIGWIN
@@ -122,8 +127,20 @@ typedef unsigned long long int	uintmax_t;
 
 #endif
 
+// Tell SWIG that boost and std integer types are equivalent to standard types
+// This prevents duplicate swig::traits definitions
+%apply int { boost::int32_t };
+%apply const int & { const boost::int32_t & };
+%apply unsigned int { boost::uint32_t };
+%apply const unsigned int & { const boost::uint32_t & };
+%apply int { std::int32_t };
+%apply const int & { const std::int32_t & };
+%apply unsigned int { std::uint32_t };
+%apply const unsigned int & { const std::uint32_t & };
+
 %shared_ptr(std::exception)
 %shared_ptr(RDKit::RDProps)
+%shared_ptr(RDKit::Conformer)
 %shared_ptr(RDKit::ROMol)
 %shared_ptr(RDKit::RWMol)
 %shared_ptr(RDKit::Atom)
@@ -133,6 +150,8 @@ typedef unsigned long long int	uintmax_t;
 %shared_ptr(RDKit::QueryAtom)
 %shared_ptr(RDKit::QueryBond)
 %shared_ptr(RDKit::QueryOps)
+%shared_ptr(RDKit::MolBundle)
+%shared_ptr(RDKit::FixedMolSizeMolBundle)
 %shared_ptr(RDKit::MolSanitizeException)
 %shared_ptr(RDKit::AtomSanitizeException)
 %shared_ptr(RDKit::AtomValenceException)
@@ -145,7 +164,7 @@ typedef unsigned long long int	uintmax_t;
 %shared_ptr(ForceFields::ForceFieldContrib);
 %shared_ptr(ForceFields::UFF::AngleBendContrib);
 %shared_ptr(ForceFields::UFF::BondStretchContrib);
-%shared_ptr(ForceFields::UFF::DistanceConstraintContrib);
+%shared_ptr(ForceFields::DistanceConstraintContrib);
 %shared_ptr(ForceFields::UFF::vdWContrib);
 %shared_ptr(ForceFields::UFF::TorsionAngleContrib);
 %shared_ptr(ForceFields::UFF::InversionContrib);
@@ -241,106 +260,56 @@ typedef RDKit::MatchVectType MatchVectType;
 %template(vectorname ## Vect) std::vector<T>;
 %enddef
 
-/* %template(BInt) boost::int32_t; */
+// DiceSimilarity template is instantiated in MorganFingerprints.i after SparseIntVect.h is included
 
 /* vector */
-/* VECTORTEMPLATE_WRAP(Int, int) */
-/* VECTORTEMPLATE_WRAP(SignedChar, signed char) */
-/* VECTORTEMPLATE_WRAP(UChar, unsigned char) */
-/* VECTORTEMPLATE_WRAP(Double, double) */
-
-/* VECTORTEMPLATE_WRAP(Str, std::string) */
-/* VECTORTEMPLATE_WRAP(Point, RDGeom::Point*) */
-/* VECTORTEMPLATE_WRAP(Point2D, RDGeom::Point2D*) */
-/* VECTORTEMPLATE_WRAP(Point3D, RDGeom::Point3D) */
-
-/* VECTORTEMPLATE_WRAP(Atom, RDKit::Atom*) */
-/* VECTORTEMPLATE_WRAP(StereoGroup, RDKit::StereoGroup) */
-
-/* VECTORTEMPLATE_WRAP(EBV, ExplicitBitVect) */
-
-/* %feature("ignore") std::vector<boost::uint32_t>::equals; */
-/* %template(UIntVect) std::vector<boost::uint32_t>; */
-
-/* %feature("ignore") std::vector<const ForceFields::UFF::AtomicParams *>::equals; */
-/* %template(AtomicParamsVect) std::vector<const ForceFields::UFF::AtomicParams *>; */
+%template(Int_Vect) std::vector<int>;
+%template(Byte_Vect) std::vector<signed char>;
+%template(Double_Vect) std::vector<double>;
+// Use base types (unsigned int) to avoid duplicate swig::traits definitions
+%template(UInt_Vect) std::vector<unsigned int>;
+%template(Str_Vect)  std::vector<std::string>;
+// Point vector templates removed - Ruby SWIG lacks swig::traits for custom types
+// %template(Point_Vect) std::vector<RDGeom::Point *>;
+// %template(Point2D_Vect) std::vector<RDGeom::Point2D *>;
+// %template(Point3D_Vect) std::vector<RDGeom::Point3D *>;
+// %template(Atomic_Params_Vect) std::vector<const ForceFields::UFF::AtomicParams *>;
 
 /* pair */
-%template(IntPair) std::pair<int, int >;
-%template(DoublePair) std::pair<double,double>;
-%template(FloatPair) std::pair<float,float>;
-/* %template(BIntPair) std::pair<boost::int32_t, int >; */
-/* %template(UIntPair) std::pair<boost::uint32_t, int >; */
-/* %template(LongPair) std::pair<boost::int64_t,int>; */
+// Use base types (int/unsigned int) to avoid duplicate swig::traits definitions
+%template(Int_Pair) std::pair<int, int>;
+%template(Double_Pair) std::pair<double,double>;
+%template(UInt_Pair) std::pair<unsigned int, int>;
+// Long_Pair removed - Ruby SWIG lacks swig::traits support for long long int
 
-/* /\* map *\/ */
-/* %template(StringStringMap) std::map<std::string, std::string>; */
-/* %template(IntIntMap) std::map<int, int>; */
+/* map */
+%template(String_String_Map) std::map<std::string,std::string>;
+%template(Int_Int_Map) std::map<int,int>;
+// Point map templates removed - Ruby SWIG lacks swig::traits for custom types
+// %template(Int_Point2D_Map) std::map<int, RDGeom::Point2D>;
+// %template(Int_Point3D_Map) std::map<int, RDGeom::Point3D>;
+%template(Int_Int_Vect_List_Map) std::map<int,std::list<std::vector<int> > >;
 
-/* %template(IntPoint2DMap) std::map<int, RDGeom::Point2D>; */
-/* %template(IntPoint3DMap) std::map<int, RDGeom::Point3D>; */
+/* vector pair */
+// Use base types (int/unsigned int) to avoid duplicate swig::traits definitions
+%template(UInt_Pair_Vect) std::vector<std::pair<unsigned int,int> >;
+%template(Match_Vect) std::vector<std::pair<int,int> >;
+// Long_Pair_Vect removed - Ruby SWIG lacks swig::traits support for long long int
 
-/* /\* vector pair *\/ */
-/* %feature("ignore") std::vector<std::pair<boost::uint32_t, int> >::equals; */
-/* %template(UIntPairVect) std::vector<UInt_Pair >; */
-/* /\* %template(UInt_Pair_Vect) std::vector<std::pair<boost::uint32_t,int> >; *\/ */
+/* vector vector */
+%template(Int_Vect_Vect) std::vector<std::vector<int> >;
 
-/* %feature("ignore") std::vector<std::pair<int, int> >::equals; */
-/* %template(MatchVect) std::vector<Int_Pair >; */
-/* /\* %template(Match_Vect) std::vector<std::pair<boost::int32_t,int> >; *\/ */
+/* list */
+%template(Int_Vect_List) std::list<std::vector<int> >;
+%template(Int_List) std::list<int>;
+%template(UInt_List) std::list<unsigned int>;
 
-/* %feature("ignore") std::vector<std::pair<boost::int64_t, int> >::equals; */
-/* /\* %template(Long_Pair_Vect) std::vector<std::pair<boost::int64_t,int> >; *\/ */
-/* %template(LongPairVect) std::vector<LongPair >; */
-
-/* /\* vector vector *\/ */
-/* VVTEMPLATE_WRAP(Int, int) */
-
-/* %feature("ignore") std::vector<std::vector<std::pair<int, int> > >::equals; */
-/* /\* %template(Match_Vect_Vect) std::vector<std::vector<std::pair<int,int> > >; *\/ */
-/* %template(MatchVectVect) std::vector<MatchVect >; */
-
-/* /\* list *\/ */
-/* /\* %template(Int_Vect_List) std::list<std::vector<int> >; *\/ */
-/* %template(IntVectList) std::list<IntVect >; */
-/* %template(IntList) std::list<int>; */
-/* %template(UIntList) std::list<unsigned int>; */
-
-/* /\* other *\/ */
-/* /\* %template(Int_Int_Vect_List_Map) std::map<int, Int_Vect_List >; *\/ */
-/* %template(IntIntVectListMap) std::map<int, IntVectList >; */
-
-/* %template(SharedIntArray) boost::shared_array<int>; */
-/* %template(SharedDoubleArray) boost::shared_array<double>; */
-
-/* %template(FlaggedAtomicParamsVect) std::pair<AtomicParamsVect, bool>; */
-/* /\* %template(Flagged_Atomic_Params_Vect) std::pair<std::vector<const ForceFields::UFF::AtomicParams *>,bool>; *\/ */
-
-/* /\* %feature("ignore") std::vector<std::pair<boost::uint32_t,boost::uint32_t> >::equals; *\/ */
-/* /\* %template(UIntPairVect) std::vector<std::pair<boost::uint32_t,boost::uint32_t> >; *\/ */
-
-/* %template(StringMolMap) std::map<std::string,boost::shared_ptr<RDKit::ROMol> >; */
-/* /\* %template(StringMolMap) std::map<std::string,ROMolSPtr >; *\/ */
-
-/* /\* %feature("ignore") std::vector<boost::shared_ptr<RDKit::ROMol>>::equals; *\/ */
-/* %template(ROMolVect) std::vector<ROMolSPtr>; */
-/* /\* %template(ROMol_Vect) std::vector<boost::shared_ptr<RDKit::ROMol>>; *\/ */
-
-/* /\* %feature("ignore") std::vector<std::map<std::string, boost::shared_ptr<RDKit::ROMol>>>::equals; *\/ */
-/* %template(StringMolMapVect) std::vector<StringMolMap>; */
-/* /\* %template(StringMolMapVect) std::vector<std::map<std::string,boost::shared_ptr<RDKit::ROMol> >>; *\/ */
-
-/* %template(StringROMolVectMap) std::map<std::string,StringMolMapVect>; */
-/* /\* %template(StringROMolVectMap) std::map<std::string,std::vector<std::map<std::string,boost::shared_ptr<RDKit::ROMol> >>>; *\/ */
-
-/* %template(IntStringMap) std::map< int, std::string >; */
-/* %template(IntDoubleMap) std::map< int, double >; */
-
-/* %template(FloatPair) std::pair<float,float>; */
-
-/* %feature("ignore") std::vector< std::pair<float,float> >::equals; */
-/* /\* %template(FloatPairVect) std::vector< std::pair<float,float> >; *\/ */
-/* %template(FloatPairVect) std::vector< FloatPair >; */
+/* other */
+%template(Match_Vect_Vect) std::vector<std::vector<std::pair<int,int> > >;
+// Flagged_Atomic_Params_Vect removed - Ruby SWIG lacks swig::traits for custom types
+// %template(Flagged_Atomic_Params_Vect) std::pair<std::vector<const ForceFields::UFF::AtomicParams *>,bool>;
+%template(Shared_Int_Array) boost::shared_array<int>;
+%template(Shared_Double_Array) boost::shared_array<double>;
 
 // These methods are renamed to valid method names
 %rename(inc)   *::operator++;
@@ -354,7 +323,7 @@ typedef RDKit::MatchVectType MatchVectType;
   double getElement(int i) {
     return (*($self))[i];
   }
-  double setElement(int i, double value) {
+  void setElement(int i, double value) {
     (*($self))[i] = value;
   }
 }
@@ -362,10 +331,13 @@ typedef RDKit::MatchVectType MatchVectType;
   int getElement(int i) {
     return (*($self))[i];
   }
-  int setElement(int i, int value) {
+  void setElement(int i, int value) {
     (*($self))[i] = value;
   }
 }
+
+// This requires SWIG 4.2 or higher - must be before RDKitExceptions.i
+%include "std_string_view.i"
 
 // DO THIS BEFORE ANY OF THE OTHER INCLUDES
 %include "../RDKitExceptions.i"
@@ -376,6 +348,7 @@ typedef RDKit::MatchVectType MatchVectType;
 // Conformer seems to need to come before ROMol
 %include "../Conformer.i"
 %include "../Dict.i"
+%include "../RDLogger.i"
 %include "../RDProps.i"
 %include "../StereoGroup.i"
 %include "../ROMol.i"
@@ -384,11 +357,13 @@ typedef RDKit::MatchVectType MatchVectType;
 %include "../BondIterators.i"
 %include "../Atom.i"
 %include "../AtomIterators.i"
-/* %include "../AtomPairs.i" */
+%include "../AtomPairs.i"
 %include "../Canon.i"
+%include "../Conformer.i"
 %include "../QueryAtom.i"
 %include "../QueryBond.i"
 %include "../QueryOps.i"
+%include "../MolBundle.i"
 %include "../MonomerInfo.i"
 %include "../PeriodicTable.i"
 %include "../SanitException.i"
@@ -418,11 +393,18 @@ typedef RDKit::MatchVectType MatchVectType;
 %include "../Trajectory.i"
 %include "../MolStandardize.i"
 %include "../SubstructLibrary.i"
-%include "../Streams.i"
-
 %include "../RGroupDecomposition.i"
-/* %include "../ScaffoldNetwork.i" */
-/* %include "../MolHash.i" */
+%include "../ScaffoldNetwork.i"
+%include "../TautomerQuery.i"
+%include "../SubstanceGroup.i"
+%include "../MolEnumerator.i"
+%include "../MolHash.i"
+%include "../Abbreviations.i"
+%include "../Streams.i"
+%include "../GeneralizedSubstruct.i"
+%include "../RascalMCES.i"
+%include "../Queries.i"
+%include "../Subset.i"
 
 %include "../Descriptors.i"
 
@@ -432,10 +414,18 @@ typedef RDKit::MatchVectType MatchVectType;
 #ifdef RDK_BUILD_INCHI_SUPPORT
 %include "../Inchi.i"
 #endif
+#ifdef RDK_BUILD_CHEMDRAW_SUPPORT
+%include "../ChemDraw.i"
+#endif
 
 %include "../DiversityPick.i"
 
 %{
 #include <RDGeneral/versions.h>
 %}
+
+%immutable RDKit::rdkitVersion;
+%immutable RDKit::boostVersion;
+%immutable RDKit::rdkitBuild;
+
 %include <RDGeneral/versions.h>

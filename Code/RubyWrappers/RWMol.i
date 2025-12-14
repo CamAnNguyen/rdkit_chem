@@ -36,110 +36,206 @@
 #include <GraphMol/SmilesParse/SmilesParse.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
 #include <GraphMol/FileParsers/FileParsers.h>
+#include <GraphMol/FileParsers/CDXMLParser.h>
 #include <GraphMol/FileParsers/SequenceParsers.h>
 #include <GraphMol/Bond.h>
 #include <GraphMol/FileParsers/MolFileStereochem.h>
 %}
 
+%template(RWMol_Vect) std::vector< boost::shared_ptr<RDKit::RWMol> >;
+
 // ignore the methods that allow the molecule to take ownership of atoms/Bonds
-// (instead of copying them). This just leads to memory problems with Java
+// (instead of copying them). This just leads to memory problems with Ruby
 %ignore RDKit::RWMol::addAtom(Atom *atom,bool updateLabel,bool takeOwnership);
 %ignore RDKit::RWMol::addBond(Bond *bond,bool takeOwnership);
 
+%newobject RDKit::v1::SmilesToMol;
+%newobject RDKit::v1::SmartsToMol;
+%newobject RDKit::v1::MolBlockToMol;
+%newobject RDKit::v1::MolFileToMol;
+
 %shared_ptr(RDKit::RWMol)
+
+%ignore RDKit::v2::SmilesParse;
+
+%ignore RDKit::v1::CDXMLDataStreamToMols;
+%ignore RDKit::v1::CDXMLFileToMols;
+%ignore RDKit::v1::CDXMLToMols;
+
+%ignore RDKit::v2::CDXMLParser::MolsFromCDXMLDataStream;
+%ignore RDKit::v2::CDXMLParser::MolsFromCDXML;
+%ignore RDKit::v2::CDXMLParser::MolsFromCDXMLFile;
+%ignore *::MolsFromCDXMLDataStream;
+
+// Ignore strip utility function to avoid conflict with MolHash::Strip
+%ignore RDKit::strip;
+
 %include <GraphMol/FileParsers/FileParsers.h>
+%include <GraphMol/FileParsers/CDXMLParser.h>
+%include <GraphMol/SmilesParse/SmilesParse.h>
+
+
 %include <GraphMol/RWMol.h>
 
 %extend RDKit::RWMol {
-  static RDKit::RWMOL_SPTR MolFromSmiles(std::string smi,int debugParse=0,bool sanitize=1,
+  static RDKit::RWMOL_SPTR MolFromSmiles(const std::string &smi,int debugParse=0,bool sanitize=1,
                                          std::map<std::string,std::string> *replacements=0){
     return RDKit::RWMOL_SPTR(RDKit::SmilesToMol(smi, debugParse, sanitize,replacements));
   }
-  static RDKit::RWMOL_SPTR MolFromSmarts(std::string sma,int debugParse=0,bool mergeHs=false,
+  static RDKit::RWMOL_SPTR MolFromSmiles(const std::string &smi, const RDKit::v1::SmilesParserParams &params){
+    return RDKit::RWMOL_SPTR(RDKit::SmilesToMol(smi, params));
+  }
+  static RDKit::RWMOL_SPTR MolFromSmarts(const std::string &sma,int debugParse=0,bool mergeHs=false,
                                          std::map<std::string,std::string> *replacements=0){
     return RDKit::RWMOL_SPTR(RDKit::SmartsToMol(sma, debugParse, mergeHs,replacements));
   }
-  static RDKit::RWMOL_SPTR MolFromMolBlock(std::string molB,
-                                    bool sanitize=true,bool removeHs=true){
-    RDKit::RWMol *mol=0;
-      mol=RDKit::MolBlockToMol(molB,sanitize,removeHs);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromMolFile(std::string filename,
-                                  bool sanitize=true,bool removeHs=true){
-    RDKit::RWMol *mol=0;
-      mol=RDKit::MolFileToMol(filename,sanitize,removeHs);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromTPLFile(std::string fName,bool sanitize=true,
-                        bool skipFirstConf=false) {
-    RDKit::RWMol *mol=0;
-      mol=RDKit::TPLFileToMol(fName, sanitize, skipFirstConf);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromMol2File(std::string fName,bool sanitize=true,bool removeHs=true,
-                        RDKit::Mol2Type variant=RDKit::CORINA, bool cleanupSubstructures=true) {
-    RDKit::RWMol *mol=0;
-    mol=RDKit::Mol2FileToMol(fName, sanitize, removeHs, variant, cleanupSubstructures);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromMol2Block(const std::string &molBlock,bool sanitize=true,bool removeHs=true,
-                          RDKit::Mol2Type variant=RDKit::CORINA, bool cleanupSubstructures=true) {
-    RDKit::RWMol *mol=0;
-      mol=RDKit::Mol2BlockToMol(molBlock, sanitize, removeHs, variant, cleanupSubstructures);
-    return RDKit::RWMOL_SPTR(mol);
-  }
+static RDKit::RWMOL_SPTR MolFromMolBlock(const std::string &molB,
+                                  bool sanitize=true,bool removeHs=true,bool strictParsing=true){
+  RDKit::RWMol *mol=RDKit::MolBlockToMol(molB,sanitize,removeHs,strictParsing);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromMolFile(const std::string &filename,
+                                 bool sanitize=true,bool removeHs=true,bool strictParsing=true){
+  RDKit::RWMol *mol=RDKit::MolFileToMol(filename,sanitize,removeHs,strictParsing);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromTPLFile(const std::string &fName,bool sanitize=true,
+                      bool skipFirstConf=false) {
+  RDKit::RWMol *mol=0;
+    mol=RDKit::TPLFileToMol(fName, sanitize, skipFirstConf);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromMol2File(const std::string &fName,bool sanitize=true,bool removeHs=true,
+                       RDKit::Mol2Type variant=RDKit::Mol2Type::CORINA, bool cleanupSubstructures=true) {
+  RDKit::RWMol *mol=0;
+  mol=RDKit::Mol2FileToMol(fName, sanitize, removeHs, variant, cleanupSubstructures);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromMol2Block(const std::string &molBlock,bool sanitize=true,bool removeHs=true,
+                        RDKit::Mol2Type variant=RDKit::Mol2Type::CORINA, bool cleanupSubstructures=true) {
+  RDKit::RWMol *mol=0;
+    mol=RDKit::Mol2BlockToMol(molBlock, sanitize, removeHs, variant, cleanupSubstructures);
+  return RDKit::RWMOL_SPTR(mol);
+}
 
-  static RDKit::RWMOL_SPTR MolFromPDBBlock(std::string molB,
-                                          bool sanitize=true,bool removeHs=true,
-                                          unsigned int flavor=0,bool proximityBonding=true){
-    RDKit::RWMol *mol=0;
-    mol=RDKit::PDBBlockToMol(molB,sanitize,removeHs,flavor,proximityBonding);
-    return RDKit::RWMOL_SPTR(mol);
-  }
+static RDKit::RWMOL_SPTR MolFromPDBBlock(const std::string &molB,
+                                         bool sanitize=true,bool removeHs=true,
+                                         unsigned int flavor=0,bool proximityBonding=true){
+  RDKit::RWMol *mol=0;
+  mol=RDKit::PDBBlockToMol(molB,sanitize,removeHs,flavor,proximityBonding);
+  return RDKit::RWMOL_SPTR(mol);
+}
 
-  static RDKit::RWMOL_SPTR MolFromPDBFile(std::string fName,
-                                          bool sanitize=true,bool removeHs=true,
-                                          unsigned int flavor=0,bool proximityBonding=true){
-    RDKit::RWMol *mol=0;
-    mol=RDKit::PDBFileToMol(fName,sanitize,removeHs,flavor,proximityBonding);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromSequence(std::string text,
-                                    bool sanitize=true,int flavor=0){
-    RDKit::RWMol *mol=0;
-    mol=RDKit::SequenceToMol(text,sanitize,flavor);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromFASTA(std::string text,
-                                    bool sanitize=true,int flavor=0){
-    RDKit::RWMol *mol=0;
-    mol=RDKit::FASTAToMol(text,sanitize,flavor);
-    return RDKit::RWMOL_SPTR(mol);
-  }
-  static RDKit::RWMOL_SPTR MolFromHELM(std::string text,
-                                    bool sanitize=true){
-    RDKit::RWMol *mol=0;
-    mol=RDKit::HELMToMol(text,sanitize);
-    return RDKit::RWMOL_SPTR(mol);
-  }
+static RDKit::RWMOL_SPTR MolFromPDBFile(const std::string &fName,
+                                        bool sanitize=true,bool removeHs=true,
+                                        unsigned int flavor=0,bool proximityBonding=true){
+  RDKit::RWMol *mol=0;
+  mol=RDKit::PDBFileToMol(fName,sanitize,removeHs,flavor,proximityBonding);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromSequence(const std::string &text,
+                                  bool sanitize=true,int flavor=0){
+  RDKit::RWMol *mol=0;
+  mol=RDKit::SequenceToMol(text,sanitize,flavor);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromFASTA(const std::string &text,
+                                  bool sanitize=true,int flavor=0){
+  RDKit::RWMol *mol=0;
+  mol=RDKit::FASTAToMol(text,sanitize,flavor);
+  return RDKit::RWMOL_SPTR(mol);
+}
+static RDKit::RWMOL_SPTR MolFromHELM(const std::string &text,
+                                  bool sanitize=true){
+  RDKit::RWMol *mol=0;
+  mol=RDKit::HELMToMol(text,sanitize);
+  return RDKit::RWMOL_SPTR(mol);
+}
 
-  static RDKit::ROMOL_SPTR toROMol(RDKit::RWMOL_SPTR target) {
-    return RDKit::ROMOL_SPTR(target);
+static std::vector<RDKit::RWMOL_SPTR> MolsFromCDXML(const std::string &text,
+						    bool sanitize=true, bool removeHs=true){
+  auto res = RDKit::CDXMLToMols(text, sanitize, removeHs);
+  std::vector<RDKit::RWMOL_SPTR> mols;
+  for(auto &mol: res) {
+    mols.emplace_back(mol.release());
   }
+  return mols;
 
-  /* Methods from MolFileStereoChem.h */
-  void DetectAtomStereoChemistry(const RDKit::Conformer *conf) {
-    RDKit::DetectAtomStereoChemistry(*($self), conf);
-  };
+}
 
-  /* From Kekulize.cpp, MolOps.h */
-  void Kekulize(bool markAtomsBonds=true, unsigned int maxBackTracks=100) {
-    RDKit::MolOps::Kekulize(*($self), markAtomsBonds, maxBackTracks);
+static std::vector<RDKit::RWMOL_SPTR>  MolsFromCDXML(
+     const std::vector<unsigned char> &text, bool sanitize=true, bool removeHs=true) {
+    std::string str(text.begin(), text.end());
+    RDKit::v2::CDXMLParser::CDXMLParserParams params;
+    params.sanitize=sanitize;
+    params.removeHs=removeHs;
+    auto res = RDKit::v2::CDXMLParser::MolsFromCDXML(str, params);
+    std::vector<RDKit::RWMOL_SPTR> mols;
+    for(auto &mol: res) {
+      mols.emplace_back(mol.release());
+    }
+    return mols;
+}
+
+static std::vector<RDKit::RWMOL_SPTR> MolsFromCDXML(
+ const std::string &text,
+ const RDKit::v2::CDXMLParser::CDXMLParserParams &params=RDKit::v2::CDXMLParser::CDXMLParserParams()) {
+  auto res = RDKit::v2::CDXMLParser::MolsFromCDXML(text, params);
+  std::vector<RDKit::RWMOL_SPTR> mols;
+  for(auto &mol: res) {
+    mols.emplace_back(mol.release());
   }
+  return mols;
 
-  /* MolOps.h */
-  void sanitizeMol() {
-    RDKit::MolOps::sanitizeMol(*($self));
+}
+
+static std::vector<RDKit::RWMOL_SPTR> MolsFromCDXMLFile(
+ const std::string &filename,
+ const RDKit::v2::CDXMLParser::CDXMLParserParams &params=RDKit::v2::CDXMLParser::CDXMLParserParams()) {
+  auto res = RDKit::v2::CDXMLParser::MolsFromCDXMLFile(filename, params);
+  std::vector<RDKit::RWMOL_SPTR> mols;
+  for(auto &mol: res) {
+    mols.emplace_back(mol.release());
   }
+  return mols;
+}
+
+static RDKit::ROMOL_SPTR toROMol(RDKit::RWMOL_SPTR target) {
+  return RDKit::ROMOL_SPTR(target);
+}
+
+/* Methods from MolFileStereoChem.h */
+void DetectAtomStereoChemistry(const RDKit::Conformer *conf) {
+  RDKit::DetectAtomStereoChemistry(*($self), conf);
+}
+void DetectBondStereoChemistry(const RDKit::Conformer *conf) {
+  RDKit::DetectBondStereoChemistry(*($self), conf);
+}
+void ClearSingleBondDirFlags(bool onlyWedgeFlags=false) {
+ RDKit::MolOps::clearSingleBondDirFlags(*($self), onlyWedgeFlags);
+};
+void reapplyMolBlockWedging() {
+  RDKit::Chirality::reapplyMolBlockWedging(*($self));
+}
+void clearMolBlockWedgingInfo() {
+  RDKit::Chirality::clearMolBlockWedgingInfo(*($self));
+}
+void invertMolBlockWedgingInfo() {
+  RDKit::Chirality::invertMolBlockWedgingInfo(*($self));
+}
+void markUnspecifiedStereoAsUnknown(int confId) {
+  RDKit::markUnspecifiedStereoAsUnknown(*($self), confId);
+}
+
+/* From Kekulize.cpp, MolOps.h */
+void Kekulize(bool markAtomsBonds=true, unsigned int maxBackTracks=100) {
+  RDKit::MolOps::Kekulize(*($self), markAtomsBonds, maxBackTracks);
+}
+
+/* MolOps.h */
+// Renamed to sanitize() to avoid conflict with standalone sanitizeMol in MolOps.i
+void sanitize() {
+  RDKit::MolOps::sanitizeMol(*($self));
+}
+
 }

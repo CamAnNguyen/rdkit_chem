@@ -36,7 +36,7 @@
 
 %{
 #include <../RDStreams/streams.h>
-#include <sstream> 
+#include <sstream>
 %}
 
 // We just need to pass the pointers around here
@@ -49,6 +49,19 @@ namespace std {
 class istream;
 }
 
-%include <../RDStreams/streams.h>
+#ifdef RDK_USE_BOOST_IOSTREAMS
+%extend RDKit::gzstream {
+    std::istream* _GetStream() { return (std::istream*)$self; }
+    std::string Dump() {
+      std::ostringstream stream;
+      std::copy(std::istreambuf_iterator<char>(*$self),
+                std::istreambuf_iterator<char>(),
+                std::ostreambuf_iterator<char>(stream));
 
+      return stream.str();
+    }
+}
+#endif
+
+%include <../RDStreams/streams.h>
 

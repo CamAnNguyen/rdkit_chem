@@ -47,29 +47,29 @@
      $action
   } catch (RDKit::ChemicalReactionException &e) {
     static VALUE exceptionError = rb_define_class("ChemicalReactionException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   } catch (RDKit::ChemicalReactionParserException &e) {
     static VALUE exceptionError = rb_define_class("ChemicalReactionParserException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   } catch (RDKit::ConformerException &e) {
     static VALUE exceptionError = rb_define_class("ConformerException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   } catch (RDKit::MolPicklerException &e) {
     static VALUE exceptionError = rb_define_class("MolPicklerException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   } catch (RDKit::MolSanitizeException &e) {
     static VALUE exceptionError = rb_define_class("MolSanitizeException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   } catch (RDKit::SmilesParseException &e) {
     static VALUE exceptionError = rb_define_class("SmilesParseException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   } catch (KeyErrorException &e) {
     static VALUE exceptionError = rb_define_class("KeyErrorException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
 
   // Generic exception -- anything else
   } catch (std::exception &e) {
     static VALUE exceptionError = rb_define_class("GenericRDKitException", rb_eRuntimeError);
-    rb_raise(exceptionError, e.what());
+    rb_raise(exceptionError, "%s", e.what());
   }
 }

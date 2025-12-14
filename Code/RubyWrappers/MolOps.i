@@ -29,25 +29,31 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+%include "std_pair.i"
 
 %{
 #include <GraphMol/MolOps.h>
 %}
 
-%feature("ignore") std::vector<boost::shared_ptr<RDKit::MolSanitizeException>>::equals;
-%template(MolSanitizeExceptionVect) std::vector<boost::shared_ptr<RDKit::MolSanitizeException>>;
+%template(MolSanitizeException_Vect) std::vector<boost::shared_ptr<RDKit::MolSanitizeException>>;
 
 %newobject RDKit::MolOps::renumberAtoms;
 %newobject RDKit::MolOps::removeHs;
 %newobject RDKit::MolOps::addHs;
-%ignore RDKit::MolOps::detectChemistryProblems;
-%include <GraphMol/MolOps.h>
-%ignore RDKit::MolOps::sanitizeMol(RWMol &,unsigned int &,unsigned int &);
+%newobject RDKit::MolOps::removeAllHs;
+%newobject RDKit::MolOps::mergeQueryHs;
+%newobject RDKit::MolOps::adjustQueryProperties;
 
-%extend RDKit::MolOps {
-  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps) {
+%ignore RDKit::MolOps::detectChemistryProblems;
+// Ignore all native sanitizeMol overloads - we provide a custom wrapper below
+%ignore RDKit::MolOps::sanitizeMol;
+%include <GraphMol/MolOps.h>
+%template(BoolPair) std::pair<bool, bool>;
+
+%inline %{
+  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps){
     unsigned int opThatFailed;
-    try {
+    try{
       RDKit::MolOps::sanitizeMol(mol,opThatFailed,
                                  static_cast<unsigned int>(sanitizeOps));
     } catch(...) {
@@ -63,4 +69,4 @@
     }
     return res;
   };
-}
+%}

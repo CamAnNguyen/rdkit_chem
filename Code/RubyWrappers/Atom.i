@@ -47,10 +47,33 @@
 #include <GraphMol/MolTransforms/MolTransforms.h>
 #include <Geometry/point.h>
 #include <GraphMol/MolOps.h>
+#include <GraphMol/SmilesParse/SmilesWrite.h>
+#include <GraphMol/SmilesParse/SmartsWrite.h>
+
+// from Python wrapper
+std::string describeQueryHelper(const RDKit::Atom::QUERYATOM_QUERY *q, unsigned int depth) {
+  std::string res;
+  if (q) {
+    for (unsigned int i = 0; i < depth; ++i) {
+      res += "  ";
+    }
+    res += q->getFullDescription() + "\n";
+    for (const auto &child :
+         boost::make_iterator_range(q->beginChildren(), q->endChildren())) {
+      res += describeQueryHelper(child.get(), depth + 1);
+    }
+  }
+  return res;
+}
+
 %}
 
 %ignore RDKit::Atom::Match(const Atom *) const;
+%ignore RDKit::Atom::expandQuery;
 %template(Bond_Vect) std::vector<RDKit::Bond*>;
+
+// Ignore ostream operators to prevent redefinition errors
+%ignore RDKit::operator<<;
 
 %include <GraphMol/Atom.h>
 
@@ -69,7 +92,7 @@
     RDKit::markConjAtomBonds(($self));
   }
   int numBondsPlusLonePairs() {
-    RDKit::numBondsPlusLonePairs(($self));
+    return RDKit::numBondsPlusLonePairs(($self));
   }
   bool atomHasConjugatedBond() {
     return RDKit::MolOps::atomHasConjugatedBond(($self));
@@ -106,5 +129,37 @@
     }
     return bonds;
   }
+
+  // also matches ATOM_NULL_QUERY
+  void setQuery(RDKit::ATOM_OR_QUERY *query) {
+    $self->setQuery(query);
+  }
+
+  void setQuery(RDKit::ATOM_EQUALS_QUERY *query) {
+    $self->setQuery(query);
+  }
+
+  // From Python Wrapper
+  std::string AtomGetSmarts(bool doKekule=false, bool allHsExplicit=false,
+                          bool isomericSmiles=true) {
+	std::string res;
+	if (($self)->hasQuery()) {
+	  res = RDKit::SmartsWrite::GetAtomSmarts(static_cast<const RDKit::QueryAtom *>(($self)));
+	} else {
+	  // FIX: this should not be necessary
+	  res = RDKit::SmilesWrite::GetAtomSmiles(($self), doKekule, nullptr, allHsExplicit,
+									   isomericSmiles);
+	}
+	return res;
+  }
+
+  // from Python Wrapper
+  std::string describeQuery() {
+	std::string res = "";
+	  res = describeQueryHelper(($self)->getQuery(), 0);
+	return res;
+  }
+
+
 
 }

@@ -21,3 +21,8 @@ typedef std::vector<unsigned> UINT_VECT;
 %include <GraphMol/ScaffoldNetwork/ScaffoldNetwork.h>
 %template(createScaffoldNetwork) RDKit::ScaffoldNetwork::createScaffoldNetwork<std::vector<boost::shared_ptr<RDKit::ROMol>>>;
 
+%extend RDKit::ScaffoldNetwork::ScaffoldNetwork {
+    unsigned int nodeCount(unsigned int nodeNumber) {
+        return $self->counts.at(nodeNumber);
+    }
+}

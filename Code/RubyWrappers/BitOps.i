@@ -52,9 +52,7 @@
 %template(CosineSimilarity) CosineSimilarity<ExplicitBitVect,ExplicitBitVect>;
 %template(KulczynskiSimilarity) KulczynskiSimilarity<ExplicitBitVect,ExplicitBitVect>;
 %template(DiceSimilarity) DiceSimilarity<ExplicitBitVect,ExplicitBitVect>;
-
 %template(TverskySimilarity) TverskySimilarity<ExplicitBitVect,ExplicitBitVect>;
-
 %template(SokalSimilarity) SokalSimilarity<ExplicitBitVect,ExplicitBitVect>;
 %template(McConnaugheySimilarity) McConnaugheySimilarity<ExplicitBitVect,ExplicitBitVect>;
 %template(AsymmetricSimilarity) AsymmetricSimilarity<ExplicitBitVect,ExplicitBitVect>;

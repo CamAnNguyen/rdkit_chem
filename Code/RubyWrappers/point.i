@@ -34,6 +34,9 @@
 #include <Geometry/point.h>
 %}
 
+// Ignore ostream operators to prevent redefinition errors
+%ignore RDGeom::operator<<;
+
 %include <Geometry/point.h>
 
 
