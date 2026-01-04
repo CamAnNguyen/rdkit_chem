@@ -52,7 +52,7 @@
 %template(BoolPair) std::pair<bool, bool>;
 
 %inline %{
-  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps){
+  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps=RDKit::MolOps::SANITIZE_ALL){
     unsigned int opThatFailed;
     try{
       RDKit::MolOps::sanitizeMol(mol,opThatFailed,
