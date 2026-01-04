@@ -29,25 +29,32 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+%include "std_pair.i"
 
 %{
 #include <GraphMol/MolOps.h>
 %}
 
-%feature("ignore") std::vector<boost::shared_ptr<RDKit::MolSanitizeException>>::equals;
-%template(MolSanitizeExceptionVect) std::vector<boost::shared_ptr<RDKit::MolSanitizeException>>;
+%template(MolSanitizeException_Vect) std::vector<boost::shared_ptr<RDKit::MolSanitizeException>>;
 
 %newobject RDKit::MolOps::renumberAtoms;
 %newobject RDKit::MolOps::removeHs;
 %newobject RDKit::MolOps::addHs;
+%newobject RDKit::MolOps::removeAllHs;
+%newobject RDKit::MolOps::mergeQueryHs;
+%newobject RDKit::MolOps::adjustQueryProperties;
+
 %ignore RDKit::MolOps::detectChemistryProblems;
 %include <GraphMol/MolOps.h>
+// Ignore only the 3-arg overload that uses reference parameters (incompatible with SWIG)
+// This keeps the 1-arg sanitizeMol(RWMol &) available from the header
 %ignore RDKit::MolOps::sanitizeMol(RWMol &,unsigned int &,unsigned int &);
+%template(BoolPair) std::pair<bool, bool>;
 
-%extend RDKit::MolOps {
-  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps) {
+%inline %{
+  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps){
     unsigned int opThatFailed;
-    try {
+    try{
       RDKit::MolOps::sanitizeMol(mol,opThatFailed,
                                  static_cast<unsigned int>(sanitizeOps));
     } catch(...) {
@@ -63,4 +70,4 @@
     }
     return res;
   };
-}
+%}

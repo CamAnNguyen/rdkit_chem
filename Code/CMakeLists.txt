@@ -27,18 +27,18 @@ add_subdirectory(ML)
 add_subdirectory(ChemicalFeatures)
 
 if(RDK_BUILD_SWIG_WRAPPERS)
-  if(RDK_BUILD_SWIG_JAVA_WRAPPER)
-    add_subdirectory(JavaWrappers)
-  endif()
-  if(RDK_BUILD_SWIG_RUBY_WRAPPER)
-    add_subdirectory(RubyWrappers)
-  endif()
+  add_subdirectory(RubyWrappers)
 endif()
 
 if(RDK_BUILD_PGSQL)
   add_subdirectory(PgSQL/rdkit)
 endif(RDK_BUILD_PGSQL)
 
-if(RDK_BUILD_MINIMAL_LIB)
-  add_subdirectory(MinimalLib)
-endif(RDK_BUILD_MINIMAL_LIB)
+add_subdirectory(MinimalLib)
+
+
+if(RDK_BUILD_FUZZ_TARGETS)
+  add_subdirectory(Fuzz)
+endif(RDK_BUILD_FUZZ_TARGETS)
+
+add_subdirectory(Bench)

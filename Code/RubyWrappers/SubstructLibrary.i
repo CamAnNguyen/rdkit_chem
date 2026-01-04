@@ -35,7 +35,11 @@
 
 %{
 #include <GraphMol/SubstructLibrary/SubstructLibrary.h>
+#include <GraphMol/TautomerQuery/TautomerQuery.h>
+#include <GraphMol/GeneralizedSubstruct/XQMol.h>
+using RDKit::GeneralizedSubstruct::ExtendedQueryMol;
 %}
+%shared_ptr(RDKit::TautomerQuery)
 %shared_ptr(RDKit::MolHolderBase)
 %shared_ptr(RDKit::MolHolder)
 %shared_ptr(RDKit::CachedMolHolder)
@@ -43,6 +47,11 @@
 %shared_ptr(RDKit::CachedTrustedSmilesMolHolder)
 %shared_ptr(RDKit::FPHolderBase)
 %shared_ptr(RDKit::PatternHolder)
+%shared_ptr(RDKit::TautomerPatternHolder)
+%shared_ptr(RDKit::KeyHolderBase)
+%shared_ptr(RDKit::KeyFromPropHolder)
+
+%template(UChar_Vect) std::vector<unsigned char>;
 
 %extend RDKit::SubstructLibrary {
   SubstructLibrary(const std::vector<unsigned char> & data ) {
@@ -50,10 +59,22 @@
     return new RDKit::SubstructLibrary(str);
   }
 
-  bool canSerialize() const {
+  static bool canSerialize() {
     return RDKit::SubstructLibraryCanSerialize();
   }
 }
 
-
+%include <GraphMol/TautomerQuery/TautomerQuery.h>
 %include <GraphMol/SubstructLibrary/SubstructLibrary.h>
+
+%extend RDKit::SubstructLibrary {
+ %template(getMatches) getMatches<ROMol>;
+ %template(getMatches) getMatches<TautomerQuery>;
+ %template(getMatches) getMatches<RDKit::GeneralizedSubstruct::ExtendedQueryMol>;
+ %template(countMatches) countMatches<ROMol>;
+ %template(countMatches) countMatches<TautomerQuery>;
+ %template(countMatches) countMatches<ExtendedQueryMol>;
+ %template(hasMatch) hasMatch<ROMol>;
+ %template(hasMatch) hasMatch<TautomerQuery>;
+ %template(hasMatch) hasMatch<ExtendedQueryMol>;
+}

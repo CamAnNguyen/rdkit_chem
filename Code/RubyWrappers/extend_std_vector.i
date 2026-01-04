@@ -2,26 +2,9 @@
  * extend_std_vector.i
  * ----------------------------------------------------------------------------- */
 
-
-%extend std::vector {
-  bool equals(const vector<T> &o){
-    if(self->size()==o.size()){
-      std::vector< T >::const_iterator sIt=self->begin();
-      std::vector< T >::const_iterator oIt=o.begin();
-      while(sIt != self->end()){
-        if(*sIt != *oIt) return false;
-        ++sIt;
-        ++oIt;
-      }
-      return true;
-    } else {
-      return false;
-    }
-  }
- };
+// Note: The generic %extend std::vector with template parameter T doesn't work
+// properly with SWIG Ruby backend. The equals() and vector(size_type) methods
+// that use T directly cause compilation errors in the generated wrapper code.
+// These extensions are removed for Ruby compatibility.
 
 %include <std_vector.i>
-
-
-
-

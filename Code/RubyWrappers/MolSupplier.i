@@ -1,21 +1,21 @@
-/* 
+/*
 * $Id$
 *
 *  Copyright (c) 2010, Novartis Institutes for BioMedical Research Inc.
 *  All rights reserved.
-* 
+*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
-* met: 
+* met:
 *
-*     * Redistributions of source code must retain the above copyright 
+*     * Redistributions of source code must retain the above copyright
 *       notice, this list of conditions and the following disclaimer.
 *     * Redistributions in binary form must reproduce the above
-*       copyright notice, this list of conditions and the following 
-*       disclaimer in the documentation and/or other materials provided 
+*       copyright notice, this list of conditions and the following
+*       disclaimer in the documentation and/or other materials provided
 *       with the distribution.
-*     * Neither the name of Novartis Institutes for BioMedical Research Inc. 
-*       nor the names of its contributors may be used to endorse or promote 
+*     * Neither the name of Novartis Institutes for BioMedical Research Inc.
+*       nor the names of its contributors may be used to endorse or promote
 *       products derived from this software without specific prior written permission.
 *
 * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -38,12 +38,13 @@
 
 %{
 #include <GraphMol/FileParsers/MolSupplier.h>
+#include <GraphMol/FileParsers/MolSupplier.v1API.h>
 #include <GraphMol/Resonance.h>
 #include <GraphMol/Substruct/SubstructMatch.h>
 %}
 
 %include "Streams.i"
-
+%ignore RDKit::v2;
 %newobject RDKit::ForwardSDMolSupplier::next;
 %newobject RDKit::ResonanceMolSupplier::next;
 %newobject RDKit::SDMolSupplier::next;
@@ -53,6 +54,22 @@
 
 
 %include <GraphMol/FileParsers/MolSupplier.h>
+%include <GraphMol/FileParsers/MolSupplier.v1API.h>
+
+#ifdef RDK_USE_BOOST_IOSTREAMS
+%extend RDKit::v1::ForwardSDMolSupplier {
+    ForwardSDMolSupplier(RDKit::gzstream *strm, bool sanitize=true, bool removeHs = true,
+                  bool strictParsing = true) {
+    const bool takeOwnership = false;
+    RDKit::ForwardSDMolSupplier*foo = new RDKit::ForwardSDMolSupplier(
+                                     (std::istream*)strm,
+                                     takeOwnership,
+                                     sanitize, removeHs, strictParsing);
+    PRECONDITION(!foo->atEnd(), "LDJKLJF");
+    return foo;
+  }
+};
+#endif
 
 %include <GraphMol/Resonance.h>
 

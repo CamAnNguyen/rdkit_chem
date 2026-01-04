@@ -1,21 +1,21 @@
-/* 
+/*
 * $Id$
 *
 *  Copyright (c) 2011, Novartis Institutes for BioMedical Research Inc.
 *  All rights reserved.
-* 
+*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
-* met: 
+* met:
 *
-*     * Redistributions of source code must retain the above copyright 
+*     * Redistributions of source code must retain the above copyright
 *       notice, this list of conditions and the following disclaimer.
 *     * Redistributions in binary form must reproduce the above
-*       copyright notice, this list of conditions and the following 
-*       disclaimer in the documentation and/or other materials provided 
+*       copyright notice, this list of conditions and the following
+*       disclaimer in the documentation and/or other materials provided
 *       with the distribution.
-*     * Neither the name of Novartis Institutes for BioMedical Research Inc. 
-*       nor the names of its contributors may be used to endorse or promote 
+*     * Neither the name of Novartis Institutes for BioMedical Research Inc.
+*       nor the names of its contributors may be used to endorse or promote
 *       products derived from this software without specific prior written permission.
 *
 * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -41,9 +41,9 @@
   std::vector<int> calcPathDiscriminators(RDKit::ROMol &mol,RDKit::PATH_TYPE &path){
     std::vector<int> res(3);
     RDKit::Subgraphs::DiscrimTuple tpl=RDKit::Subgraphs::calcPathDiscriminators(mol,path);
-    res[0]=boost::get<0>(tpl);
-    res[1]=boost::get<1>(tpl);
-    res[2]=boost::get<2>(tpl);
+    res[0]=std::get<0>(tpl);
+    res[1]=std::get<1>(tpl);
+    res[2]=std::get<2>(tpl);
     return res;
   }
 %}
@@ -51,4 +51,3 @@
 %ignore calcPathDiscriminators;
 %newobject pathToSubmol;
 %include <GraphMol/Subgraphs/SubgraphUtils.h>
-

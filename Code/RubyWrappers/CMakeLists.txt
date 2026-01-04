@@ -1,4 +1,4 @@
-find_package(SWIG REQUIRED)
+find_package(SWIG 4.2 REQUIRED)
 include(${SWIG_USE_FILE})
 
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
@@ -27,6 +27,7 @@ set(swigRDKitLibList "${swigRDKitLibList}"
   "PartialCharges;MolTransforms;DistGeomHelpers;DistGeometry;"
   "ForceFieldHelpers;ForceField;EigenSolvers;Optimizer;MolAlign;"
   "Alignment;SimDivPickers;RDGeometryLib;RDStreams;RDGeneral;"
+  "Abbreviations;GeneralizedSubstruct;MolEnumerator;TautomerQuery;RascalMCES;"
 )
 #if(RDK_BUILD_COORDGEN_SUPPORT)
 #  set(swigRDKitLibList "${swigRDKitLibList};${RDK_COORDGEN_LIBS}")

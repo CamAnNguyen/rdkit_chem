@@ -10,9 +10,43 @@
 *
 */
 %{
+#include <GraphMol/RGroupDecomposition/RGroupDecompParams.h>
+#include <GraphMol/RGroupDecomposition/RGroupDecompJSONParsers.h>
 #include <GraphMol/RGroupDecomposition/RGroupDecomp.h>
+typedef std::vector<std::string> STR_VECT;
 %}
 
-//%template(SparseIntVect64) RDKit::SparseIntVect<boost::int64_t>;
+%include "std_string.i"
 
+// SparseIntVect64 removed - Ruby SWIG lacks swig::traits for long long int (already defined in AtomPairs.i for 32-bit versions)
+
+%template(ROMol_Vect) std::vector<boost::shared_ptr<RDKit::ROMol>>;
+%template(StringMolMap_Vect) std::vector<std::map<std::string, boost::shared_ptr<RDKit::ROMol>>>;
+%template(StringROMol_VectMap) std::map<std::string,std::vector<boost::shared_ptr<RDKit::ROMol>>>;
+
+
+%extend std::map<std::string, boost::shared_ptr<RDKit::ROMol>> {
+  std::vector<std::string> keys() {
+    std::vector<std::string> _keys;
+    for(auto it : *self) {
+      std::cerr << "* '" << it.first << "'" << std::endl;
+      _keys.push_back(it.first);
+    }
+    return _keys;
+  }
+}
+
+%extend std::map<std::string,std::vector<boost::shared_ptr<RDKit::ROMol>>> {
+  std::vector<std::string> keys() {
+    std::vector<std::string> _keys;
+    for(auto it : *self) {
+      _keys.push_back(it.first);
+    }
+    return _keys;
+  }
+}
+
+%include <RDGeneral/BetterEnums.h>
+%include <GraphMol/RGroupDecomposition/RGroupDecompParams.h>
+%include <GraphMol/RGroupDecomposition/RGroupDecompJSONParsers.h>
 %include <GraphMol/RGroupDecomposition/RGroupDecomp.h>

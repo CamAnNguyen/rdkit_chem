@@ -40,7 +40,7 @@
 #include <GraphMol/ROMol.h>
 %}
 
-// This prevents duplicate definitions in Java code (due to 2 C++ functions resolving to the same Java function)
+// This prevents duplicate definitions in Ruby code (due to 2 C++ functions resolving to the same Ruby function)
 %ignore RDKit::DGeomHelpers::initBoundsMat(DistGeom::BoundsMatPtr, double, double);
 %ignore RDKit::DGeomHelpers::initBoundsMat(DistGeom::BoundsMatPtr,double);
 %ignore RDKit::DGeomHelpers::initBoundsMat(DistGeom::BoundsMatPtr);
@@ -61,7 +61,7 @@
 %copyctor RDKit::DGeomHelpers::EmbedParameters;
 
 // we want to ignore the const global parameter objects because SWIG does a
-// poor job of making them read-only when they are exposed to Java.
+// poor job of making them read-only when they are exposed.
 %ignore RDKit::DGeomHelpers::KDG;
 %ignore RDKit::DGeomHelpers::ETDG;
 %ignore RDKit::DGeomHelpers::ETKDG;
@@ -141,7 +141,7 @@
           basinThresh);
       }
 
-      static int EmbedMolecule(RDKit::ROMol &mol,const RDKit::DGeomHelpers::EmbedParameters &params) {
+      static int EmbedMolecule(RDKit::ROMol &mol,RDKit::DGeomHelpers::EmbedParameters &params) {
         return RDKit::DGeomHelpers::EmbedMolecule(mol,params);
       }
 
@@ -179,7 +179,7 @@
       }
       static RDKit::INT_VECT EmbedMultipleConfs(RDKit::ROMol &mol,
                                                 unsigned int numConfs,
-                                                const RDKit::DGeomHelpers::EmbedParameters &params) {
+                                                RDKit::DGeomHelpers::EmbedParameters &params) {
         return RDKit::DGeomHelpers::EmbedMultipleConfs(mol, numConfs, params);
       }
 
@@ -205,7 +205,7 @@
           basinSizeTol);
       }
 
-      // This is hard to override in Java, so do it here.
+      // This is hard to override in Ruby, so do it here.
       static bool ComputeInitialCoords(const RDNumeric::SymmMatrix<double> &distmat,
         std::vector<RDGeom::Point3D *> &positions, bool randNegEig=false,
         unsigned int numZeroFail=2) {

@@ -5,4 +5,6 @@
 #include "DiversityPick.h"
 %}
 
+%template(EBV_Vect) std::vector< ExplicitBitVect >;
+
 %include "DiversityPick.h";

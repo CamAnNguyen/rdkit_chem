@@ -33,9 +33,9 @@
 %include "std_vector.i"
 %include "std_map.i"
 %include "std_pair.i"
-%include "boost_tuple.i"
 %{
 #include <GraphMol/RDKitBase.h>
+#include <GraphMol/MolDraw2D/MolDraw2DHelpers.h>
 #include <GraphMol/MolDraw2D/MolDraw2D.h>
 #include <GraphMol/MolDraw2D/MolDraw2DSVG.h>
 #include <GraphMol/MolDraw2D/MolDraw2DUtils.h>
@@ -44,15 +44,17 @@
 #include <utility>
 %}
 
-%template(IntStringMap) std::map< int, std::string >;
-
-#ifdef SWIGRUBY
+%template(Int_String_Map) std::map< int, std::string >;
 %template(ColourPalette) std::map< int, RDKit::DrawColour >;
-#endif
-
-%template(IntDoubleMap) std::map< int, double >;
-%template(ROMolPtrVect) std::vector<RDKit::ROMol*>;
-%template(Point2DVect) std::vector<RDGeom::Point2D *>;
+%template(Colour_Vect) std::vector< RDKit::DrawColour >;
+%template(MultipleColourPalette) std::map< int, std::vector< RDKit::DrawColour > >;
+%template(Int_Double_Map) std::map< int, double >;
+%template(Float_Pair) std::pair<float,float>;
+%template(Float_Pair_Vect) std::vector< std::pair<float,float> >;
+%template(ROMol_Ptr_Vect) std::vector<RDKit::ROMol*>;
+%template(Point2D_Vect) std::vector<RDGeom::Point2D *>;
+%template(ColourPalette_Vect) std::vector< std::map< int, RDKit::DrawColour > >;
+%template(Int_Double_Map_Vect) std::vector< std::map< int, double > >;
 
 %ignore RDKit::MolDraw2DSVG::MolDraw2DSVG(int,int,std::ostream &);
 %ignore RDKit::MolDraw2DUtils::contourAndDrawGaussians(
@@ -68,6 +70,7 @@
 %ignore RDKit::MolDraw2DUtils::contourAndDrawGrid;
 
 
+%include <GraphMol/MolDraw2D/MolDraw2DHelpers.h>
 %include <GraphMol/MolDraw2D/MolDraw2D.h>
 %include <GraphMol/MolDraw2D/MolDraw2DSVG.h>
 %include <GraphMol/MolDraw2D/MolDraw2DUtils.h>

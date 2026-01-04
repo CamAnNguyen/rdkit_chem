@@ -1,21 +1,21 @@
-/* 
+/*
 * $Id$
 *
 *  Copyright (c) 2010, Novartis Institutes for BioMedical Research Inc.
 *  All rights reserved.
-* 
+*
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
-* met: 
+* met:
 *
-*     * Redistributions of source code must retain the above copyright 
+*     * Redistributions of source code must retain the above copyright
 *       notice, this list of conditions and the following disclaimer.
 *     * Redistributions in binary form must reproduce the above
-*       copyright notice, this list of conditions and the following 
-*       disclaimer in the documentation and/or other materials provided 
+*       copyright notice, this list of conditions and the following
+*       disclaimer in the documentation and/or other materials provided
 *       with the distribution.
-*     * Neither the name of Novartis Institutes for BioMedical Research Inc. 
-*       nor the names of its contributors may be used to endorse or promote 
+*     * Neither the name of Novartis Institutes for BioMedical Research Inc.
+*       nor the names of its contributors may be used to endorse or promote
 *       products derived from this software without specific prior written permission.
 *
 * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -42,15 +42,19 @@
 #include <GraphMol/ChemReactions/ReactionPickler.h>
 %}
 
+%ignore RDKit::CDXMLToChemicalReactions;
+%ignore RDKit::CDXMLFileToChemicalReactions;
+%ignore RDKit::CDXMLDataStreamToChemicalReactions;
+
 %include <GraphMol/ChemReactions/Reaction.h>
 %include <GraphMol/ChemReactions/ReactionParser.h>
-
 %ignore RDKit::ChemicalReaction::validate(unsigned int &,unsigned int &,bool);
 %ignore RDKit::ChemicalReaction::validate(unsigned int &,unsigned int &);
 %ignore RDKit::isMoleculeReactantOfReaction(const ChemicalReaction &r,const ROMol &,
                                             unsigned int &);
 %ignore RDKit::isMoleculeProductOfReaction(const ChemicalReaction &r,const ROMol &,
                                             unsigned int &);
+
 
 %newobject ReactionFromSmarts;
 %newobject ReactionFromRxnBlock;
@@ -122,11 +126,9 @@ static RDKit::ChemicalReaction *RxnFromBinary(std::vector<int> pkl){
   return res;
 };
 
-/* A Java-accessible validation function */
+/* A Ruby-accessible validation function */
     std::pair<int,int> *validateReaction(bool silent=false) {
 	std::pair<int,int> *res = new std::pair<int,int>();
-	// Use some local unsigned ints so that we don't create a new and useless type at the Java
-	// level.
 	unsigned int first;
 	unsigned int second;
 	($self)->validate(first, second, silent);
@@ -140,5 +142,25 @@ static RDKit::ChemicalReaction *RxnFromBinary(std::vector<int> pkl){
     bool res=$self->validate(nErr,nWarn);
     return res;
   };
+
+static std::vector<std::shared_ptr<ChemicalReaction>> CDXMLToChemicalReactions(
+  const std::string &block, bool sanitize=false, bool removeHs=false) {
+  auto reactions = RDKit::CDXMLToChemicalReactions(block, sanitize, removeHs);
+  std::vector<std::shared_ptr<RDKit::ChemicalReaction>> result;
+  for(auto &rxn : reactions) {
+    result.emplace_back(rxn.release());
+  }
+  return result;
+}
+
+static std::vector<std::shared_ptr<ChemicalReaction>> CDXMLFileToChemicalReactions(
+  const std::string &filename, bool sanitize=false, bool removeHs=false) {
+  auto reactions = RDKit::CDXMLFileToChemicalReactions(filename, sanitize, removeHs);
+  std::vector<std::shared_ptr<RDKit::ChemicalReaction>> result;
+  for(auto &rxn : reactions) {
+    result.emplace_back(rxn.release());
+  }
+  return result;
+}
 
 }

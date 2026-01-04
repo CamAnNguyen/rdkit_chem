@@ -25,7 +25,7 @@ Dir.chdir main_dir do
 end
 
 Dir.chdir(src_dir) do
-  checkout = 'git checkout 39bcee635e0ee8bc5da6798318fdcd4602c4baa6'
+  checkout = 'git checkout c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1'
   system checkout
 end
 
@@ -40,9 +40,6 @@ FileUtils.cp_r(
   File.join(rdkit_dir),
   remove_destination: true
 )
-
-env_boost_root = ENV['BOOST_ROOT'] || ''
-boost_root = env_boost_root.empty? ? '/usr/include' : env_boost_root
 
 host_os = RbConfig::CONFIG['host_os']
 is_linux = host_os =~ /linux/
