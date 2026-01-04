@@ -45,9 +45,10 @@
 %newobject RDKit::MolOps::adjustQueryProperties;
 
 %ignore RDKit::MolOps::detectChemistryProblems;
-// Ignore all native sanitizeMol overloads - we provide a custom wrapper below
-%ignore RDKit::MolOps::sanitizeMol;
 %include <GraphMol/MolOps.h>
+// Ignore only the 3-arg overload that uses reference parameters (incompatible with SWIG)
+// This keeps the 1-arg sanitizeMol(RWMol &) available from the header
+%ignore RDKit::MolOps::sanitizeMol(RWMol &,unsigned int &,unsigned int &);
 %template(BoolPair) std::pair<bool, bool>;
 
 %inline %{

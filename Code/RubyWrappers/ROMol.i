@@ -189,9 +189,12 @@ unsigned int getDefaultPickleProperties();
     return res;
   }
 
-  /* Used in the addConformer modifications described above */
-  unsigned int RDKit::ROMol::addConf(RDKit::Conformer * ownedConf, bool assignId=false) {
-    return self->addConformer(ownedConf, assignId);
+  /* Create a copy of the conformer before adding it to the molecule.
+     This avoids the double-free issue since Ruby owns the original and C++ owns the copy.
+     The original DISOWN approach doesn't work with shared_ptr wrappers. */
+  unsigned int RDKit::ROMol::addConf(RDKit::Conformer *conf, bool assignId=false) {
+    RDKit::Conformer *confCopy = new RDKit::Conformer(*conf);
+    return self->addConformer(confCopy, assignId);
   }
 
   std::string MolToSmiles(bool doIsomericSmiles=true, bool doKekule=false, int rootedAtAtom=-1, bool canonical=true,
