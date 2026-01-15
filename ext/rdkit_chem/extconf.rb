@@ -16,17 +16,20 @@ rescue StandardError
   nr_processors = 1
 end
 
+def run_command(command, description)
+  puts description if description
+  success = system(command)
+  abort "ERROR: #{description || command} failed" unless success
+end
+
 FileUtils.mkdir_p rdkit_dir
 Dir.chdir main_dir do
   FileUtils.rm_rf src_dir
-  puts 'Downloading RDKit sources'
-  git = 'git clone https://github.com/rdkit/rdkit.git'
-  system git
+  run_command('git clone https://github.com/rdkit/rdkit.git', 'Downloading RDKit sources')
 end
 
 Dir.chdir(src_dir) do
-  checkout = 'git checkout c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1'
-  system checkout
+  run_command('git checkout c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1', 'Checking out RDKit sources')
 end
 
 FileUtils.cp_r(
@@ -56,21 +59,18 @@ end
 
 FileUtils.mkdir_p build_dir
 Dir.chdir build_dir do
-  puts 'Configuring RDKit'
-
   cmake = "#{ld_path} cmake #{src_dir} -DRDK_INSTALL_INTREE=OFF " \
           "-DCMAKE_INSTALL_PREFIX=#{install_dir} " \
           '-DCMAKE_BUILD_TYPE=Release -DRDK_BUILD_PYTHON_WRAPPERS=OFF ' \
           '-DRDK_BUILD_SWIG_WRAPPERS=ON -DRDK_BUILD_INCHI_SUPPORT=OFF ' \
           '-DBoost_NO_BOOST_CMAKE=ON'
-  system cmake
+  run_command(cmake, 'Configuring RDKit')
 end
 
 # local installation in gem directory
 Dir.chdir build_dir do
-  puts 'Compiling RDKit sources.'
-  system "#{ld_path} make -j#{nr_processors}"
-  system "#{ld_path} make install"
+  run_command("#{ld_path} make -j#{nr_processors}", 'Compiling RDKit sources')
+  run_command("#{ld_path} make install", 'Installing RDKit sources')
 end
 
 # Remove compiled file, free spaces

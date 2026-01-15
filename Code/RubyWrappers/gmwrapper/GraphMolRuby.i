@@ -58,6 +58,12 @@
 
 %include <boost_shared_ptr.i>
 %{
+    #ifdef snprintf
+    #undef snprintf
+    #endif
+    #ifdef vsnprintf
+    #undef vsnprintf
+    #endif
     #include <boost/shared_ptr.hpp>
     #include <boost/shared_array.hpp>
     #include <ForceField/UFF/Params.h>
