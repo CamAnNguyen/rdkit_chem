@@ -120,10 +120,41 @@ jobs:
         run: |
           cd ext/rdkit_chem && ruby extconf.rb
         timeout-minutes: 45
-      
+
+      - name: Diagnose bundle
+        run: |
+          echo "=== Bundle Info ==="
+          file rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Linked libraries (otool -L) ==="
+          otool -L rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Bundle load commands ==="
+          otool -l rdkit_chem/lib/RDKitChem.bundle | head -100
+          echo ""
+          echo "=== Check for flat_namespace flag ==="
+          otool -l rdkit_chem/lib/RDKitChem.bundle | grep -A 2 LC_DYLD_INFO || echo "No LC_DYLD_INFO found"
+
+      - name: Test BEFORE repair (with DYLD_LIBRARY_PATH)
+        run: |
+          echo "Testing extension loading BEFORE repair_macos..."
+          # Use DYLD_PRINT_LIBRARIES to see what's being loaded
+          DYLD_PRINT_LIBRARIES=1 DYLD_LIBRARY_PATH=rdkit_chem/lib ruby -Irdkit_chem/lib -Ilib -e "require 'rdkit_chem'; puts 'SUCCESS: Loaded before repair'" 2>&1 || echo "FAILED: Could not load before repair"
+
       - name: Repair libraries (install_name_tool)
         run: |
           rake repair_macos
+
+      - name: Diagnose bundle AFTER repair
+        run: |
+          echo "=== Bundle Info AFTER repair ==="
+          file rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Linked libraries AFTER repair (otool -L) ==="
+          otool -L rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Check codesign ==="
+          codesign -dv rdkit_chem/lib/RDKitChem.bundle 2>&1 || echo "Codesign check failed"
 
       - name: Test native loading
         run: |
