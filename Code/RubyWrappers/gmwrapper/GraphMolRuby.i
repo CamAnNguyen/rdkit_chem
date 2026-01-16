@@ -31,6 +31,12 @@
 */
 %module RDKitChem
 
+// Debug: Print message at very start of module initialization
+%init %{
+  fprintf(stderr, "RDKitChem: Starting module initialization...\n");
+  fflush(stderr);
+%}
+
 #if defined(SWIGWORDSIZE64)
 %{
 // There's a problem with SWIG, 64bit windows, and modern VC++ versions
