@@ -31,9 +31,11 @@ def preload_rdkit_dylibs(native_path)
 
   require 'fiddle'
   flags = Fiddle::RTLD_LAZY | Fiddle::RTLD_GLOBAL
+  handles = []
   Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort.each do |dylib|
-    Fiddle::Handle.new(dylib, flags)
+    handles << Fiddle::Handle.new(dylib, flags)
   end
+  Object.const_set(:RDKITCHEM_PRELOADED_DYLIBS, handles) unless Object.const_defined?(:RDKITCHEM_PRELOADED_DYLIBS)
 end
 
 native_path = find_rdkit_native_extension
