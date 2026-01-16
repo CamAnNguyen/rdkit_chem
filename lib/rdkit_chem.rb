@@ -30,8 +30,9 @@ def preload_rdkit_dylibs(native_path)
   return unless RUBY_PLATFORM.include?('darwin')
 
   require 'fiddle'
+  flags = Fiddle::RTLD_LAZY | Fiddle::RTLD_GLOBAL
   Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort.each do |dylib|
-    Fiddle.dlopen(dylib)
+    Fiddle.dlopen(dylib, flags)
   end
 end
 
