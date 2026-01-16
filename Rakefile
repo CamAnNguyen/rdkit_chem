@@ -339,8 +339,8 @@ task :repair_macos do
   puts "REPAIR macOS: Bundling dependencies and fixing library paths"
   puts "=" * 70
 
-  # Step 1 & 2: Find and bundle external dependencies (recursively)
-  puts "\n[Step 1/4] Finding and bundling external dependencies..."
+  # Step 1: Find and bundle external dependencies (recursively)
+  puts "\n[Step 1/5] Finding and bundling external dependencies..."
   total_bundled = 0
   iteration = 0
   max_iterations = 10  # Safety limit
@@ -376,7 +376,7 @@ task :repair_macos do
   # Rescan after bundling
   all_libs = Dir.glob("#{libs_dir}/*.dylib") + Dir.glob("#{libs_dir}/*.bundle")
 
-  puts "\n[Step 2/4] Setting install names and rpath..."
+  puts "\n[Step 2/5] Setting install names and rpath..."
   all_libs.each do |lib|
     next if File.symlink?(lib)
     lib_name = File.basename(lib)
@@ -384,7 +384,7 @@ task :repair_macos do
     system("install_name_tool -add_rpath @loader_path '#{lib}' 2>/dev/null")
   end
 
-  puts "\n[Step 3/4] Rewriting dependency paths to @loader_path..."
+  puts "\n[Step 3/5] Rewriting dependency paths to @loader_path..."
   rewrite_count = 0
   all_libs.each do |lib|
     next if File.symlink?(lib)
@@ -409,8 +409,20 @@ task :repair_macos do
 
   puts "  Rewrote #{rewrite_count} dependency paths"
 
+  # Step 4: Re-sign all libraries (required for Apple Silicon)
+  # Modifying binaries with install_name_tool invalidates code signatures
+  puts "\n[Step 4/5] Re-signing libraries for Apple Silicon..."
+  sign_count = 0
+  all_libs.each do |lib|
+    next if File.symlink?(lib)
+    # Ad-hoc sign with force to replace any existing signature
+    result = system("codesign --force --sign - '#{lib}' 2>/dev/null")
+    sign_count += 1 if result
+  end
+  puts "  Signed #{sign_count} libraries"
+
   # Verification step
-  puts "\n[Step 4/4] Verifying all dependencies are bundled..."
+  puts "\n[Step 5/5] Verifying all dependencies are bundled..."
   verify_macos_self_contained(libs_dir)
 
   puts "\n" + "=" * 70
