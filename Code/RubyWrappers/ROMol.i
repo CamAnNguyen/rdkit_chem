@@ -101,12 +101,11 @@
 
 /*
  * Special handling for Conformer objects which should not be GCed until the molecule is destroyed
- * We want to modify the behavior of the Conformer coming into the addConformer method without
- * impacting Conformer objects that are arguments to other methods. Therefore we define a pattern
- * that will trigger special handling of the Conformer input (the addConf method  match this pattern).
+ * We ignore the original addConformer and provide our own in %extend that copies the conformer
+ * to avoid double-free issues with shared_ptr wrappers.
+ * Both addConf and addConformer are defined in %extend below (add_conf and add_conformer in Ruby).
  */
-%ignore addConformer(Conformer * conf, bool assignId=false);
-%rename(addConformer) RDKit::ROMol::addConf;
+%ignore RDKit::ROMol::addConformer;
 %include <GraphMol/ROMol.h>
 
 %ignore SubstructMatch;
@@ -189,9 +188,18 @@ unsigned int getDefaultPickleProperties();
     return res;
   }
 
-  /* Used in the addConformer modifications described above */
-  unsigned int RDKit::ROMol::addConf(RDKit::Conformer * ownedConf, bool assignId=false) {
-    return self->addConformer(ownedConf, assignId);
+  /* Create a copy of the conformer before adding it to the molecule.
+     This avoids the double-free issue since Ruby owns the original and C++ owns the copy.
+     The original DISOWN approach doesn't work with shared_ptr wrappers. */
+  unsigned int addConf(RDKit::Conformer *conf, bool assignId=false) {
+    RDKit::Conformer *confCopy = new RDKit::Conformer(*conf);
+    return self->addConformer(confCopy, assignId);
+  }
+
+  // Alias for addConf - exposes as add_conformer in Ruby
+  unsigned int addConformer(RDKit::Conformer *conf, bool assignId=false) {
+    RDKit::Conformer *confCopy = new RDKit::Conformer(*conf);
+    return self->addConformer(confCopy, assignId);
   }
 
   std::string MolToSmiles(bool doIsomericSmiles=true, bool doKekule=false, int rootedAtAtom=-1, bool canonical=true,

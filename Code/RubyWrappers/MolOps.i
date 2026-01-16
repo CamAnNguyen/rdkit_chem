@@ -44,23 +44,27 @@
 %newobject RDKit::MolOps::mergeQueryHs;
 %newobject RDKit::MolOps::adjustQueryProperties;
 
-%ignore RDKit::MolOps::detectChemistryProblems;
-// Ignore all native sanitizeMol overloads - we provide a custom wrapper below
+// IMPORTANT: %ignore must come BEFORE %include
+// Ignore all sanitizeMol overloads - we provide custom wrapper below
 %ignore RDKit::MolOps::sanitizeMol;
+%ignore RDKit::MolOps::detectChemistryProblems;
 %include <GraphMol/MolOps.h>
 %template(BoolPair) std::pair<bool, bool>;
 
 %inline %{
-  int sanitizeMol(RDKit::RWMol &mol,int sanitizeOps){
+  // Custom sanitizeMol wrapper that returns the operation that failed
+  // Only ONE definition needed - default parameter handles both use cases
+  int sanitizeMol(RDKit::RWMol &mol, int sanitizeOps=RDKit::MolOps::SANITIZE_ALL){
     unsigned int opThatFailed;
     try{
-      RDKit::MolOps::sanitizeMol(mol,opThatFailed,
+      RDKit::MolOps::sanitizeMol(mol, opThatFailed,
                                  static_cast<unsigned int>(sanitizeOps));
     } catch(...) {
 
     }
     return static_cast<int>(opThatFailed);
-  };
+  }
+
   std::vector<boost::shared_ptr<RDKit::MolSanitizeException>> detectChemistryProblems(RDKit::ROMol &mol,int sanitizeOps=RDKit::MolOps::SANITIZE_ALL){
     std::vector<boost::shared_ptr<RDKit::MolSanitizeException>> res;
     auto probs = RDKit::MolOps::detectChemistryProblems(mol,sanitizeOps);

@@ -25,6 +25,10 @@ find_package(Ruby REQUIRED)
 
 INCLUDE_DIRECTORIES(${RDKit_INCLUDE_DIR} ${RUBY_INCLUDE_PATH})
 
+if(APPLE)
+  add_compile_options(-Wno-register -include ${CMAKE_CURRENT_SOURCE_DIR}/ruby_compat.h)
+endif()
+
 SET_SOURCE_FILES_PROPERTIES(GraphMolRuby.i PROPERTIES CPLUSPLUS ON )
 
 SET(CMAKE_SWIG_OUTDIR ${CMAKE_CURRENT_SOURCE_DIR}/swig_ruby )
@@ -62,6 +66,10 @@ SWIG_LINK_LIBRARIES(RDKitChem
   ${RDKit_Wrapper_Libs}
   ${Boost_SERIALIZATION_LIBRARY}
   ${RDKit_THREAD_LIBS})
+
+if(APPLE)
+  set_target_properties(RDKitChem PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+endif()
 
 MESSAGE("serial: ${Boost_SERIALIZATION_LIBRARY}")
 MESSAGE("THREAD: ${RDKit_THREAD_LIBS}")
