@@ -26,7 +26,17 @@ def find_rdkit_native_extension
                    "Searched in:\n  - #{precompiled_path}\n  - #{source_compiled_path}"
 end
 
+def preload_rdkit_dylibs(native_path)
+  return unless RUBY_PLATFORM.include?('darwin')
+
+  require 'fiddle'
+  Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort.each do |dylib|
+    Fiddle.dlopen(dylib)
+  end
+end
+
 native_path = find_rdkit_native_extension
 $LOAD_PATH.unshift(native_path) unless $LOAD_PATH.include?(native_path)
+preload_rdkit_dylibs(native_path)
 
 require 'RDKitChem'
