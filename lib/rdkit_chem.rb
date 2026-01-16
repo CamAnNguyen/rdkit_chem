@@ -32,7 +32,7 @@ def preload_rdkit_dylibs(native_path)
   require 'fiddle'
   flags = Fiddle::RTLD_LAZY | Fiddle::RTLD_GLOBAL
   Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort.each do |dylib|
-    Fiddle.dlopen(dylib, flags)
+    Fiddle::Handle.new(dylib, flags)
   end
 end
 
