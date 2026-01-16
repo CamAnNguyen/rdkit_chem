@@ -59,6 +59,10 @@ SET(CMAKE_SWIG_FLAGS -small -naturalvar -autorename)
 
 SWIG_ADD_LIBRARY(RDKitChem TYPE MODULE LANGUAGE ruby SOURCES GraphMolRuby.i)
 
+# Ensure all SWIG type information uses the same type table
+# This is critical for macOS where symbol visibility differs from Linux
+target_compile_definitions(RDKitChem PRIVATE SWIG_TYPE_TABLE=RDKitChem)
+
 # it doesnt seem like the threading libs should need to be here, but
 # as of Oct 2012 using boost 1.51 under at least ubuntu 12.04 we get a
 # link error if they aren't there.
@@ -68,6 +72,8 @@ SWIG_LINK_LIBRARIES(RDKitChem
   ${RDKit_THREAD_LIBS})
 
 if(APPLE)
+  # Ensure all symbols are visible (required for SWIG type system)
+  target_compile_options(RDKitChem PRIVATE -fvisibility=default)
   # -undefined dynamic_lookup: Allow undefined Ruby symbols, resolved at runtime
   # -flat_namespace: Use single global symbol namespace (like Linux) instead of
   #                  macOS two-level namespace. Required for SWIG type registry
