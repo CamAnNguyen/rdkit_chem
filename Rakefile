@@ -185,6 +185,9 @@ task :test_native do
   # Test without LD_LIBRARY_PATH / DYLD_LIBRARY_PATH
   # Clear environment to ensure we're not relying on system paths
   env = { 'LD_LIBRARY_PATH' => '', 'DYLD_LIBRARY_PATH' => '' }
+  if RUBY_PLATFORM =~ /darwin/
+    env['DYLD_FALLBACK_LIBRARY_PATH'] = so_dir
+  end
   cmd = "ruby -I#{so_dir} -Ilib -e \"require 'rdkit_chem'; puts 'SUCCESS: RDKitChem loaded'\""
 
   # Use spawn to ensure clean environment
