@@ -1,0 +1,8 @@
+# Ignore locally compiled files
+rdkit_chem/
+rdkit/
+dist/
+*.gem
+
+# Ignore git
+.git/

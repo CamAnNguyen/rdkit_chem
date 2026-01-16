@@ -58,11 +58,25 @@ FileUtils.mkdir_p build_dir
 Dir.chdir build_dir do
   puts 'Configuring RDKit'
 
-  cmake = "#{ld_path} cmake #{src_dir} -DRDK_INSTALL_INTREE=OFF " \
-          "-DCMAKE_INSTALL_PREFIX=#{install_dir} " \
-          '-DCMAKE_BUILD_TYPE=Release -DRDK_BUILD_PYTHON_WRAPPERS=OFF ' \
-          '-DRDK_BUILD_SWIG_WRAPPERS=ON -DRDK_BUILD_INCHI_SUPPORT=OFF ' \
-          '-DBoost_NO_BOOST_CMAKE=ON'
+  # Build options
+  cmake_opts = [
+    "-DRDK_INSTALL_INTREE=OFF",
+    "-DCMAKE_INSTALL_PREFIX=#{install_dir}",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DRDK_BUILD_PYTHON_WRAPPERS=OFF",
+    "-DRDK_BUILD_SWIG_WRAPPERS=ON",
+    "-DRDK_BUILD_SWIG_RUBY_WRAPPER=ON",
+    "-DRDK_BUILD_INCHI_SUPPORT=OFF",
+    "-DBoost_NO_BOOST_CMAKE=ON",
+  ]
+
+  # On macOS, use static libraries to avoid dylib symbol issues
+  if is_mac
+    cmake_opts << "-DRDK_INSTALL_STATIC_LIBS=ON"
+    cmake_opts << "-DRDK_SWIG_STATIC=ON"
+  end
+
+  cmake = "#{ld_path} cmake #{src_dir} #{cmake_opts.join(' ')}"
   system cmake
 end
 
