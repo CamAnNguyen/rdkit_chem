@@ -68,7 +68,11 @@ SWIG_LINK_LIBRARIES(RDKitChem
   ${RDKit_THREAD_LIBS})
 
 if(APPLE)
-  set_target_properties(RDKitChem PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+  # -undefined dynamic_lookup: Allow undefined Ruby symbols, resolved at runtime
+  # -flat_namespace: Use single global symbol namespace (like Linux) instead of
+  #                  macOS two-level namespace. Required for SWIG type registry
+  #                  to work correctly across multiple dylibs.
+  set_target_properties(RDKitChem PROPERTIES LINK_FLAGS "-undefined dynamic_lookup -flat_namespace")
 endif()
 
 MESSAGE("serial: ${Boost_SERIALIZATION_LIBRARY}")

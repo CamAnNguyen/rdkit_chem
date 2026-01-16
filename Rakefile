@@ -191,7 +191,7 @@ task :test_native do
   result = system(env, cmd)
 
   if result
-    puts "\nNative extension loads correctly without library path environment variables!"
+    puts "\nNative extension loads correctly!"
   else
     puts "\nFAILED: Extension failed to load."
     if RUBY_PLATFORM =~ /darwin/
