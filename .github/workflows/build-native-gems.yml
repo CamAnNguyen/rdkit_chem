@@ -114,12 +114,14 @@ jobs:
       
       - name: Install dependencies
         run: |
-          brew install cmake eigen freetype libpng zlib autoconf automake libtool pcre2
+          brew install cmake eigen freetype libpng zlib autoconf automake libtool pcre2 bison
 
       - name: Install SWIG 4.3.0 (avoid 4.4.x macOS regression)
         run: |
           # SWIG 4.4.x has macOS-specific issues (https://github.com/swig/swig/issues/3279)
           # Build SWIG 4.3.0 from source
+          # Use Homebrew bison (macOS system bison is too old)
+          export PATH="$(brew --prefix bison)/bin:$PATH"
           curl -sSL https://github.com/swig/swig/archive/refs/tags/v4.3.0.tar.gz | tar xz
           cd swig-4.3.0
           ./autogen.sh
