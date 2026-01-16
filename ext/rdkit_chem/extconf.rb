@@ -74,6 +74,15 @@ Dir.chdir build_dir do
   if is_mac
     cmake_opts << "-DRDK_INSTALL_STATIC_LIBS=ON"
     cmake_opts << "-DRDK_SWIG_STATIC=ON"
+
+    # Use custom Boost if BOOST_ROOT is set (built in CI)
+    if ENV['BOOST_ROOT']
+      boost_root = ENV['BOOST_ROOT']
+      cmake_opts << "-DBOOST_ROOT=#{boost_root}"
+      cmake_opts << "-DBoost_NO_SYSTEM_PATHS=ON"
+      cmake_opts << "-DBoost_USE_STATIC_LIBS=ON"
+      puts "Using custom Boost from: #{boost_root}"
+    end
   end
 
   cmake = "#{ld_path} cmake #{src_dir} #{cmake_opts.join(' ')}"

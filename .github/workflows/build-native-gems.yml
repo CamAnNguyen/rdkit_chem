@@ -114,8 +114,47 @@ jobs:
       
       - name: Install dependencies
         run: |
-          brew install cmake boost eigen swig freetype libpng
-      
+          brew install cmake eigen freetype libpng zlib autoconf automake libtool pcre2
+
+      - name: Install SWIG 4.3.0 (avoid 4.4.x macOS regression)
+        run: |
+          # SWIG 4.4.x has macOS-specific issues (https://github.com/swig/swig/issues/3279)
+          # Build SWIG 4.3.0 from source
+          curl -sSL https://github.com/swig/swig/archive/refs/tags/v4.3.0.tar.gz | tar xz
+          cd swig-4.3.0
+          ./autogen.sh
+          ./configure --prefix=/usr/local
+          make -j$(sysctl -n hw.ncpu)
+          sudo make install
+          swig -version
+
+      - name: Build Boost (static)
+        run: |
+          BOOST_VERSION=1.86.0
+          BOOST_DIR=${{ github.workspace }}/boost_install
+
+          echo "Downloading Boost ${BOOST_VERSION}..."
+          curl -sSL "https://archives.boost.io/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION//./_}.tar.gz" | tar xz
+          cd boost_${BOOST_VERSION//./_}
+
+          echo "Bootstrapping Boost..."
+          ./bootstrap.sh --prefix=${BOOST_DIR} --with-libraries=serialization,iostreams,system
+
+          echo "Building Boost static libraries..."
+          ./b2 install \
+            link=static \
+            runtime-link=shared \
+            variant=release \
+            threading=multi \
+            -j$(sysctl -n hw.ncpu)
+
+          echo "Boost installed to ${BOOST_DIR}"
+          ls -la ${BOOST_DIR}/lib/
+
+          # Set environment for subsequent steps
+          echo "BOOST_ROOT=${BOOST_DIR}" >> $GITHUB_ENV
+          echo "Boost_DIR=${BOOST_DIR}" >> $GITHUB_ENV
+
       - name: Build RDKit
         run: |
           cd ext/rdkit_chem && ruby extconf.rb
