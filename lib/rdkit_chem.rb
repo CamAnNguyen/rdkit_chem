@@ -29,10 +29,16 @@ end
 def preload_rdkit_dylibs(native_path)
   return unless RUBY_PLATFORM.include?('darwin')
 
+  # Check if there are any dylibs to preload.
+  # When built with RDK_SWIG_STATIC=ON (the default on macOS), all RDKit symbols
+  # are statically linked into RDKitChem.bundle, so no dylibs exist or need preloading.
+  dylibs = Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort
+  return if dylibs.empty?
+
   require 'fiddle'
   flags = Fiddle::RTLD_LAZY | Fiddle::RTLD_GLOBAL
   handles = []
-  Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort.each do |dylib|
+  dylibs.each do |dylib|
     handles << Fiddle::Handle.new(dylib, flags)
   end
   Object.const_set(:RDKITCHEM_PRELOADED_DYLIBS, handles) unless Object.const_defined?(:RDKITCHEM_PRELOADED_DYLIBS)

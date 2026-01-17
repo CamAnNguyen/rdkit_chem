@@ -182,15 +182,19 @@ task :test_native do
   so_dir = File.expand_path(NATIVE_DIR, __dir__)
   puts "Testing native extension loading from #{so_dir}..."
 
-  # Test without LD_LIBRARY_PATH / DYLD_LIBRARY_PATH
-  # Clear environment to ensure we're not relying on system paths
   env = { 'LD_LIBRARY_PATH' => '', 'DYLD_LIBRARY_PATH' => '' }
+  
   if RUBY_PLATFORM =~ /darwin/
-    env['DYLD_FALLBACK_LIBRARY_PATH'] = so_dir
+    dylib_count = Dir.glob("#{so_dir}/libRDKit*.dylib").size
+    if dylib_count > 0
+      env['DYLD_FALLBACK_LIBRARY_PATH'] = so_dir
+      puts "  Found #{dylib_count} dylibs - using DYLD_FALLBACK_LIBRARY_PATH"
+    else
+      puts "  No dylibs found - statically linked bundle"
+    end
   end
+  
   cmd = "ruby -I#{so_dir} -Ilib -e \"require 'rdkit_chem'; puts 'SUCCESS: RDKitChem loaded'\""
-
-  # Use spawn to ensure clean environment
   result = system(env, cmd)
 
   if result
