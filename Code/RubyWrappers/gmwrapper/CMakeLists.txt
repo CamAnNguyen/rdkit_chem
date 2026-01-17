@@ -87,4 +87,19 @@ endif()
 MESSAGE("serial: ${Boost_SERIALIZATION_LIBRARY}")
 MESSAGE("THREAD: ${RDKit_THREAD_LIBS}")
 
-INSTALL(TARGETS RDKitChem LIBRARY DESTINATION lib)
+# Install the SWIG wrapper (MODULE library)
+# SWIG creates MODULE libraries (.bundle on macOS, .so on Linux)
+# CMake 3.14+ handles MODULE installation correctly
+install(TARGETS RDKitChem
+  LIBRARY DESTINATION lib    # Linux .so
+  RUNTIME DESTINATION lib    # Windows .dll (if ever needed)
+)
+
+# For older CMake or explicit module handling on macOS
+if(APPLE)
+  get_target_property(RDKIT_OUTPUT_NAME RDKitChem OUTPUT_NAME)
+  if(NOT RDKIT_OUTPUT_NAME)
+    set(RDKIT_OUTPUT_NAME "RDKitChem")
+  endif()
+  install(FILES $<TARGET_FILE:RDKitChem> DESTINATION lib OPTIONAL)
+endif()
