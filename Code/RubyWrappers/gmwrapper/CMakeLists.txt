@@ -74,14 +74,13 @@ SWIG_LINK_LIBRARIES(RDKitChem
 if(APPLE)
   target_compile_options(RDKitChem PRIVATE -fvisibility=default)
 
+  # -flat_namespace: Required for SWIG Ruby on macOS to ensure the SWIG type
+  # system uses a single global symbol table. Without this, static variables
+  # like swig_module may not be properly initialized when loaded as a bundle.
   # -undefined dynamic_lookup: Allow undefined Ruby symbols, resolved at runtime
-  # This is standard for Ruby native extensions on macOS
-  target_link_options(RDKitChem PRIVATE "LINKER:-undefined,dynamic_lookup")
+  target_link_options(RDKitChem PRIVATE "LINKER:-flat_namespace,-undefined,dynamic_lookup")
   
-  # Note: We no longer use -flat_namespace because with RDK_SWIG_STATIC=ON,
-  # all RDKit symbols are statically linked into the bundle. The SWIG type
-  # system works correctly when all symbols are in a single compilation unit.
-  MESSAGE(STATUS "macOS: Using -undefined dynamic_lookup (static linking, no flat_namespace needed)")
+  MESSAGE(STATUS "macOS: Using -flat_namespace -undefined dynamic_lookup (for SWIG type system)")
 endif()
 
 MESSAGE("serial: ${Boost_SERIALIZATION_LIBRARY}")
