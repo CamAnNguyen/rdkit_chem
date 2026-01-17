@@ -71,30 +71,29 @@ task :build_native do
   # Create target directory
   FileUtils.mkdir_p(target_dir)
 
-  # Copy all shared libraries - resolve symlinks to actual files for cross-platform compatibility
-  # RubyGems warns about symlinks not being supported on all platforms (especially Windows)
-  # Pattern matches: .so* (Linux), .dylib (macOS), .bundle (macOS Ruby extension)
   copied_files = Set.new
-  lib_patterns = ["#{NATIVE_DIR}/*.so*", "#{NATIVE_DIR}/*.dylib", "#{NATIVE_DIR}/*.bundle"]
+  
+  if RUBY_PLATFORM =~ /darwin/
+    # macOS: Only copy the .bundle file (statically linked, no dylibs needed)
+    lib_patterns = ["#{NATIVE_DIR}/*.bundle"]
+  else
+    # Linux: Copy .so files (resolve symlinks to actual files)
+    lib_patterns = ["#{NATIVE_DIR}/*.so*"]
+  end
   
   lib_patterns.flat_map { |p| Dir.glob(p) }.uniq.each do |lib|
-    next if lib.end_with?('.a') # Skip static libraries
+    next if lib.end_with?('.a')
     
-    # Get the real file (resolving symlinks)
     real_file = File.realpath(lib)
     basename = File.basename(lib)
     dest = File.join(target_dir, basename)
     
-    # If this is a symlink, copy the actual file with the symlink's name
-    # This flattens the symlink structure: libFoo.so.1 -> libFoo.so.1.2026... becomes just libFoo.so.1
     if File.symlink?(lib)
-      # Copy actual content to the symlink name (avoiding duplicates)
       unless copied_files.include?(dest)
         FileUtils.cp(real_file, dest, verbose: true)
         copied_files.add(dest)
       end
     else
-      # Regular file - copy directly
       unless copied_files.include?(dest)
         FileUtils.cp(lib, dest, verbose: true)
         copied_files.add(dest)
@@ -183,17 +182,6 @@ task :test_native do
   puts "Testing native extension loading from #{so_dir}..."
 
   env = { 'LD_LIBRARY_PATH' => '', 'DYLD_LIBRARY_PATH' => '' }
-  
-  if RUBY_PLATFORM =~ /darwin/
-    dylib_count = Dir.glob("#{so_dir}/libRDKit*.dylib").size
-    if dylib_count > 0
-      env['DYLD_FALLBACK_LIBRARY_PATH'] = so_dir
-      puts "  Found #{dylib_count} dylibs - using DYLD_FALLBACK_LIBRARY_PATH"
-    else
-      puts "  No dylibs found - statically linked bundle"
-    end
-  end
-  
   cmd = "ruby -I#{so_dir} -Ilib -e \"require 'rdkit_chem'; puts 'SUCCESS: RDKitChem loaded'\""
   result = system(env, cmd)
 

@@ -119,12 +119,6 @@ if(RDK_SWIG_STATIC AND RDK_BUILD_SWIG_WRAPPERS)
 endif()
 if ((MSVC AND (NOT RDK_INSTALL_DLLS_MSVC)) OR (WIN32 AND RDK_INSTALL_STATIC_LIBS) OR RDK_BUILD_MINIMAL_LIB)
   set(RDK_BUILD_STATIC_LIBS_ONLY ON)
-elseif(APPLE AND RDK_SWIG_STATIC)
-  # On macOS with SWIG static linking, build ONLY static libraries.
-  # This prevents dylib symbol conflicts with the statically-linked SWIG wrapper.
-  # The bundle will contain all RDKit symbols; no dylibs needed.
-  set(RDK_BUILD_STATIC_LIBS_ONLY ON)
-  message(STATUS "macOS + RDK_SWIG_STATIC: Building static libraries only (no dylibs)")
 else()
   set(RDK_BUILD_STATIC_LIBS_ONLY OFF)
 endif()

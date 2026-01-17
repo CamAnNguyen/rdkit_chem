@@ -172,20 +172,11 @@ jobs:
           echo ""
           echo "=== Linked libraries (otool -L) ==="
           otool -L rdkit_chem/lib/RDKitChem.bundle
-          echo ""
-          echo "=== dylib count ==="
-          ls rdkit_chem/lib/*.dylib 2>/dev/null | wc -l || echo "0"
 
-      - name: Repair libraries (if needed)
+      - name: Sign bundle for Apple Silicon
         run: |
-          dylib_count=$(ls rdkit_chem/lib/*.dylib 2>/dev/null | wc -l || echo "0")
-          if [ "$dylib_count" -gt "0" ]; then
-            echo "Found $dylib_count dylibs - running repair_macos"
-            rake repair_macos
-          else
-            echo "No dylibs found (statically linked) - signing bundle only"
-            codesign --force --sign - rdkit_chem/lib/RDKitChem.bundle
-          fi
+          codesign --force --sign - rdkit_chem/lib/RDKitChem.bundle
+          echo "Bundle signed successfully"
 
       - name: Test native loading
         run: |
