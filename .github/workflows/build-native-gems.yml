@@ -180,7 +180,29 @@ jobs:
 
       - name: Test native loading
         run: |
-          rake test_native
+          echo "=== Testing with verbose output ==="
+          ruby -v -e "
+            puts 'Ruby: ' + RUBY_VERSION
+            puts 'Platform: ' + RUBY_PLATFORM
+            
+            # Check what SWIG globals exist before loading
+            puts 'SWIG globals before load: ' + global_variables.grep(/swig/).inspect
+            
+            # Add the path
+            native_path = File.expand_path('rdkit_chem/lib')
+            \$LOAD_PATH.unshift(native_path)
+            
+            begin
+              puts 'Loading RDKitChem...'
+              require 'RDKitChem'
+              puts 'SUCCESS: RDKitChem loaded'
+              puts 'SWIG globals after load: ' + global_variables.grep(/swig/).inspect
+            rescue => e
+              puts 'FAILED: ' + e.class.to_s + ': ' + e.message
+              puts e.backtrace.first(10).join(\"\\n\")
+              exit 1
+            end
+          "
 
       - name: Build native gem
         run: |
