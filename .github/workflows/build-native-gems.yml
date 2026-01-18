@@ -46,12 +46,27 @@ jobs:
             cmake \
             libboost-all-dev \
             libeigen3-dev \
-            swig \
             libfreetype6-dev \
             libpng-dev \
             zlib1g-dev \
             libsqlite3-dev \
-            patchelf
+            patchelf \
+            autoconf \
+            automake \
+            libtool \
+            libpcre2-dev \
+            bison
+      
+      - name: Install SWIG 4.3.0 (system SWIG is too old)
+        run: |
+          # Ubuntu apt has SWIG 4.0, but we require 4.2+ for Ruby bindings
+          curl -sSL https://github.com/swig/swig/archive/refs/tags/v4.3.0.tar.gz | tar xz
+          cd swig-4.3.0
+          ./autogen.sh
+          ./configure --prefix=/usr/local
+          make -j$(nproc)
+          sudo make install
+          swig -version
       
       - name: Build RDKit and extension
         run: |
