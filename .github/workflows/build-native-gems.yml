@@ -15,10 +15,6 @@ on:
         default: false
         type: boolean
 
-env:
-  # RDKit commit to build against
-  RDKIT_COMMIT: c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1
-
 jobs:
   # ===========================================================================
   # Build Linux gems directly on Ubuntu runners (not rake-compiler-dock)
@@ -91,6 +87,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Apple Silicon (arm64)
           - runner: macos-15
             arch: arm64-darwin
             ruby: '3.1'
@@ -102,6 +99,19 @@ jobs:
             ruby: '3.3'
           - runner: macos-15
             arch: arm64-darwin
+            ruby: '3.4'
+          # Intel Mac (x86_64)
+          - runner: macos-13
+            arch: x86_64-darwin
+            ruby: '3.1'
+          - runner: macos-13
+            arch: x86_64-darwin
+            ruby: '3.2'
+          - runner: macos-13
+            arch: x86_64-darwin
+            ruby: '3.3'
+          - runner: macos-13
+            arch: x86_64-darwin
             ruby: '3.4'
     
     steps:
@@ -162,47 +172,44 @@ jobs:
           cd ext/rdkit_chem && ruby extconf.rb
         timeout-minutes: 45
 
-      - name: Diagnose build output
+      - name: Diagnose bundle
         run: |
-          echo "=== Build output contents ==="
-          ls -la rdkit_chem/lib/
-          echo ""
           echo "=== Bundle Info ==="
           file rdkit_chem/lib/RDKitChem.bundle
           echo ""
           echo "=== Linked libraries (otool -L) ==="
           otool -L rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Bundle load commands ==="
+          otool -l rdkit_chem/lib/RDKitChem.bundle | head -100
+          echo ""
+          echo "=== Check for flat_namespace flag ==="
+          otool -l rdkit_chem/lib/RDKitChem.bundle | grep -A 2 LC_DYLD_INFO || echo "No LC_DYLD_INFO found"
 
-      - name: Sign bundle for Apple Silicon
+      - name: Test BEFORE repair (with DYLD_LIBRARY_PATH)
         run: |
-          codesign --force --sign - rdkit_chem/lib/RDKitChem.bundle
-          echo "Bundle signed successfully"
+          echo "Testing extension loading BEFORE repair_macos..."
+          # Use DYLD_PRINT_LIBRARIES to see what's being loaded
+          DYLD_PRINT_LIBRARIES=1 DYLD_LIBRARY_PATH=rdkit_chem/lib ruby -Irdkit_chem/lib -Ilib -e "require 'rdkit_chem'; puts 'SUCCESS: Loaded before repair'" 2>&1 || echo "FAILED: Could not load before repair"
+
+      - name: Repair libraries (install_name_tool)
+        run: |
+          rake repair_macos
+
+      - name: Diagnose bundle AFTER repair
+        run: |
+          echo "=== Bundle Info AFTER repair ==="
+          file rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Linked libraries AFTER repair (otool -L) ==="
+          otool -L rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Check codesign ==="
+          codesign -dv rdkit_chem/lib/RDKitChem.bundle 2>&1 || echo "Codesign check failed"
 
       - name: Test native loading
         run: |
-          echo "=== Testing with verbose output ==="
-          ruby -v -e "
-            puts 'Ruby: ' + RUBY_VERSION
-            puts 'Platform: ' + RUBY_PLATFORM
-            
-            # Check what SWIG globals exist before loading
-            puts 'SWIG globals before load: ' + global_variables.grep(/swig/).inspect
-            
-            # Add the path
-            native_path = File.expand_path('rdkit_chem/lib')
-            \$LOAD_PATH.unshift(native_path)
-            
-            begin
-              puts 'Loading RDKitChem...'
-              require 'RDKitChem'
-              puts 'SUCCESS: RDKitChem loaded'
-              puts 'SWIG globals after load: ' + global_variables.grep(/swig/).inspect
-            rescue => e
-              puts 'FAILED: ' + e.class.to_s + ': ' + e.message
-              puts e.backtrace.first(10).join(\"\\n\")
-              exit 1
-            end
-          "
+          rake test_native
 
       - name: Build native gem
         run: |
@@ -251,7 +258,7 @@ jobs:
           - os: ubuntu-24.04
             ruby: '3.4'
             artifact: gem-x86_64-linux-ruby3.4
-          # macOS tests
+          # macOS ARM64 tests
           - os: macos-15
             ruby: '3.1'
             artifact: gem-arm64-darwin-ruby3.1
@@ -264,6 +271,19 @@ jobs:
           - os: macos-15
             ruby: '3.4'
             artifact: gem-arm64-darwin-ruby3.4
+          # macOS x86_64 tests
+          - os: macos-13
+            ruby: '3.1'
+            artifact: gem-x86_64-darwin-ruby3.1
+          - os: macos-13
+            ruby: '3.2'
+            artifact: gem-x86_64-darwin-ruby3.2
+          - os: macos-13
+            ruby: '3.3'
+            artifact: gem-x86_64-darwin-ruby3.3
+          - os: macos-13
+            ruby: '3.4'
+            artifact: gem-x86_64-darwin-ruby3.4
     
     steps:
       - uses: actions/checkout@v4

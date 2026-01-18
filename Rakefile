@@ -71,29 +71,30 @@ task :build_native do
   # Create target directory
   FileUtils.mkdir_p(target_dir)
 
+  # Copy all shared libraries - resolve symlinks to actual files for cross-platform compatibility
+  # RubyGems warns about symlinks not being supported on all platforms (especially Windows)
+  # Pattern matches: .so* (Linux), .dylib (macOS), .bundle (macOS Ruby extension)
   copied_files = Set.new
-  
-  if RUBY_PLATFORM =~ /darwin/
-    # macOS: Only copy the .bundle file (statically linked, no dylibs needed)
-    lib_patterns = ["#{NATIVE_DIR}/*.bundle"]
-  else
-    # Linux: Copy .so files (resolve symlinks to actual files)
-    lib_patterns = ["#{NATIVE_DIR}/*.so*"]
-  end
+  lib_patterns = ["#{NATIVE_DIR}/*.so*", "#{NATIVE_DIR}/*.dylib", "#{NATIVE_DIR}/*.bundle"]
   
   lib_patterns.flat_map { |p| Dir.glob(p) }.uniq.each do |lib|
-    next if lib.end_with?('.a')
+    next if lib.end_with?('.a') # Skip static libraries
     
+    # Get the real file (resolving symlinks)
     real_file = File.realpath(lib)
     basename = File.basename(lib)
     dest = File.join(target_dir, basename)
     
+    # If this is a symlink, copy the actual file with the symlink's name
+    # This flattens the symlink structure: libFoo.so.1 -> libFoo.so.1.2026... becomes just libFoo.so.1
     if File.symlink?(lib)
+      # Copy actual content to the symlink name (avoiding duplicates)
       unless copied_files.include?(dest)
         FileUtils.cp(real_file, dest, verbose: true)
         copied_files.add(dest)
       end
     else
+      # Regular file - copy directly
       unless copied_files.include?(dest)
         FileUtils.cp(lib, dest, verbose: true)
         copied_files.add(dest)
@@ -181,8 +182,12 @@ task :test_native do
   so_dir = File.expand_path(NATIVE_DIR, __dir__)
   puts "Testing native extension loading from #{so_dir}..."
 
+  # Test without LD_LIBRARY_PATH / DYLD_LIBRARY_PATH
+  # Clear environment to ensure we're not relying on system paths
   env = { 'LD_LIBRARY_PATH' => '', 'DYLD_LIBRARY_PATH' => '' }
   cmd = "ruby -I#{so_dir} -Ilib -e \"require 'rdkit_chem'; puts 'SUCCESS: RDKitChem loaded'\""
+
+  # Use spawn to ensure clean environment
   result = system(env, cmd)
 
   if result
@@ -305,6 +310,26 @@ task :repair_dry_run do
     
     total_size = external_deps.sum { |dep| File.size(dep) } / 1024.0 / 1024.0
     puts "\n  Total: #{external_deps.size} libraries, #{format('%.2f MB', total_size)}"
+  end
+end
+
+desc 'Analyze dependencies using auditwheel lddtree (if available)'
+task :lddtree do
+  so_file = File.join(NATIVE_DIR, 'RDKitChem.so')
+  so_file = File.join(NATIVE_DIR, 'RDKitChem.bundle') unless File.exist?(so_file)
+  
+  unless File.exist?(so_file)
+    abort "ERROR: Native extension not found in #{NATIVE_DIR}"
+  end
+
+  if system('which auditwheel > /dev/null 2>&1')
+    puts "Using auditwheel lddtree for dependency analysis:\n\n"
+    sh "auditwheel lddtree '#{so_file}'"
+  elsif system('which ldd > /dev/null 2>&1')
+    puts "auditwheel not found, falling back to ldd:\n\n"
+    sh "ldd '#{so_file}'"
+  else
+    abort "ERROR: Neither auditwheel nor ldd available"
   end
 end
 

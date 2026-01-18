@@ -31,11 +31,7 @@
 */
 %module RDKitChem
 
-// Debug: Print message at very start of module initialization
-%init %{
-  fprintf(stderr, "RDKitChem: Starting module initialization...\n");
-  fflush(stderr);
-%}
+
 
 #if defined(SWIGWORDSIZE64)
 %{

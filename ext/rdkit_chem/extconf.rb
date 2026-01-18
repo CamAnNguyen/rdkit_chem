@@ -5,6 +5,9 @@ require 'rbconfig'
 require 'mkmf'
 
 main_dir = File.expand_path(File.join(File.dirname(__FILE__), '..', '..'))
+$LOAD_PATH.unshift File.join(main_dir, 'lib')
+require 'rdkit_chem/version'
+
 rdkit_dir = File.join(main_dir, 'rdkit')
 install_dir = File.join(main_dir, 'rdkit_chem')
 src_dir = rdkit_dir
@@ -16,6 +19,30 @@ rescue StandardError
   nr_processors = 1
 end
 
+# Detect build system: prefer Ninja if available (2-3x faster), fallback to Make
+def detect_build_system
+  # Allow override via environment variable
+  if ENV['CMAKE_GENERATOR']
+    generator = ENV['CMAKE_GENERATOR']
+    if generator.downcase.include?('ninja')
+      return { generator: 'Ninja', command: 'ninja', available: system('which ninja > /dev/null 2>&1') }
+    end
+
+    return { generator:, command: 'make', available: true }
+
+  end
+
+  # Auto-detect: prefer Ninja if installed
+  if system('which ninja > /dev/null 2>&1')
+    { generator: 'Ninja', command: 'ninja', available: true }
+  else
+    { generator: 'Unix Makefiles', command: 'make', available: true }
+  end
+end
+
+build_system = detect_build_system
+puts "Using build system: #{build_system[:generator]}"
+
 FileUtils.mkdir_p rdkit_dir
 Dir.chdir main_dir do
   FileUtils.rm_rf src_dir
@@ -25,7 +52,7 @@ Dir.chdir main_dir do
 end
 
 Dir.chdir(src_dir) do
-  checkout = 'git checkout c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1'
+  checkout = "git checkout #{RDKitChem::RDKIT_COMMIT}"
   system checkout
 end
 
@@ -60,40 +87,47 @@ Dir.chdir build_dir do
 
   # Build options
   cmake_opts = [
-    "-DRDK_INSTALL_INTREE=OFF",
+    '-DRDK_INSTALL_INTREE=OFF',
     "-DCMAKE_INSTALL_PREFIX=#{install_dir}",
-    "-DCMAKE_BUILD_TYPE=Release",
-    "-DRDK_BUILD_PYTHON_WRAPPERS=OFF",
-    "-DRDK_BUILD_SWIG_WRAPPERS=ON",
-    "-DRDK_BUILD_SWIG_RUBY_WRAPPER=ON",
-    "-DRDK_BUILD_INCHI_SUPPORT=OFF",
-    "-DBoost_NO_BOOST_CMAKE=ON",
+    '-DCMAKE_BUILD_TYPE=Release',
+    '-DRDK_BUILD_PYTHON_WRAPPERS=OFF',
+    '-DRDK_BUILD_SWIG_WRAPPERS=ON',
+    '-DRDK_BUILD_SWIG_RUBY_WRAPPER=ON',
+    '-DRDK_BUILD_INCHI_SUPPORT=OFF',
+    '-DRDK_BUILD_CHEMDRAW_SUPPORT=ON',
+    '-DBoost_NO_BOOST_CMAKE=ON'
   ]
 
   # On macOS, use static libraries to avoid dylib symbol issues
   if is_mac
-    cmake_opts << "-DRDK_INSTALL_STATIC_LIBS=ON"
-    cmake_opts << "-DRDK_SWIG_STATIC=ON"
+    cmake_opts << '-DRDK_INSTALL_STATIC_LIBS=ON'
+    cmake_opts << '-DRDK_SWIG_STATIC=ON'
 
     # Use custom Boost if BOOST_ROOT is set (built in CI)
     if ENV['BOOST_ROOT']
       boost_root = ENV['BOOST_ROOT']
       cmake_opts << "-DBOOST_ROOT=#{boost_root}"
-      cmake_opts << "-DBoost_NO_SYSTEM_PATHS=ON"
-      cmake_opts << "-DBoost_USE_STATIC_LIBS=ON"
+      cmake_opts << '-DBoost_NO_SYSTEM_PATHS=ON'
+      cmake_opts << '-DBoost_USE_STATIC_LIBS=ON'
       puts "Using custom Boost from: #{boost_root}"
     end
   end
+
+  cmake_opts << "-G \"#{build_system[:generator]}\""
 
   cmake = "#{ld_path} cmake #{src_dir} #{cmake_opts.join(' ')}"
   system cmake
 end
 
-# local installation in gem directory
 Dir.chdir build_dir do
   puts 'Compiling RDKit sources.'
-  system "#{ld_path} make -j#{nr_processors}"
-  system "#{ld_path} make install"
+  if build_system[:command] == 'ninja'
+    system "#{ld_path} ninja"
+    system "#{ld_path} ninja install"
+  else
+    system "#{ld_path} make -j#{nr_processors}"
+    system "#{ld_path} make install"
+  end
 end
 
 # Remove compiled file, free spaces

@@ -19,15 +19,18 @@ endif(RDK_BUILD_AVALON_SUPPORT)
 if(RDK_BUILD_INCHI_SUPPORT)
   set(swigRDKitLibList "${swigRDKitLibList}RDInchiLib;${INCHI_LIBRARIES};")
 endif(RDK_BUILD_INCHI_SUPPORT)
+if(RDK_BUILD_CHEMDRAW_SUPPORT)
+  set(swigRDKitLibList "${swigRDKitLibList}RDChemDrawLib;ChemDraw;")
+endif(RDK_BUILD_CHEMDRAW_SUPPORT)
 set(swigRDKitLibList "${swigRDKitLibList}"
-  "ScaffoldNetwork;MolHash;RGroupDecomposition;SubstructLibrary;"
-  "MolStandardize;FilterCatalog;Catalogs;FMCS;MolDraw2D;FileParsers;SmilesParse;"
+  "RascalMCES;GeneralizedSubstruct;Abbreviations;ScaffoldNetwork;MolHash;RGroupDecomposition;SubstructLibrary;TautomerQuery;"
+  "MolEnumerator;"
+  "MolStandardize;FilterCatalog;Catalogs;FMCS;MolDraw2D;FileParsers;SmilesParse;MarvinParser;"
   "Depictor;SubstructMatch;ChemReactions;Fingerprints;ChemTransforms;"
   "Subgraphs;GraphMol;DataStructs;Trajectory;Descriptors;"
   "PartialCharges;MolTransforms;DistGeomHelpers;DistGeometry;"
-  "ForceFieldHelpers;ForceField;EigenSolvers;Optimizer;O3AAlign;MolAlign;"
+  "ForceFieldHelpers;ForceField;EigenSolvers;Optimizer;MolAlign;O3AAlign;"
   "Alignment;SimDivPickers;RDGeometryLib;RDStreams;RDGeneral;"
-  "Abbreviations;GeneralizedSubstruct;MolEnumerator;TautomerQuery;RascalMCES;"
 )
 #if(RDK_BUILD_COORDGEN_SUPPORT)
 #  set(swigRDKitLibList "${swigRDKitLibList};${RDK_COORDGEN_LIBS}")

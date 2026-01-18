@@ -72,24 +72,23 @@ SWIG_LINK_LIBRARIES(RDKitChem
   ${RDKit_THREAD_LIBS})
 
 if(APPLE)
+  # Ensure all symbols are visible (required for SWIG type system)
   target_compile_options(RDKitChem PRIVATE -fvisibility=default)
 
-  # -flat_namespace: Required for SWIG Ruby on macOS to ensure the SWIG type
-  # system uses a single global symbol table. Without this, static variables
-  # like swig_module may not be properly initialized when loaded as a bundle.
+  # macOS linker flags for SWIG type system compatibility:
   # -undefined dynamic_lookup: Allow undefined Ruby symbols, resolved at runtime
-  target_link_options(RDKitChem PRIVATE "LINKER:-flat_namespace,-undefined,dynamic_lookup")
-  
-  MESSAGE(STATUS "macOS: Using -flat_namespace -undefined dynamic_lookup (for SWIG type system)")
+  # -flat_namespace: Use single global symbol namespace (like Linux) instead of
+  #                  macOS two-level namespace. Required for SWIG type registry
+  #                  to work correctly across multiple dylibs.
+  # Using target_link_options (CMake 3.13+) for proper propagation
+  target_link_options(RDKitChem PRIVATE
+    "LINKER:-undefined,dynamic_lookup"
+    "LINKER:-flat_namespace"
+  )
+  MESSAGE(STATUS "macOS: Added -flat_namespace and -undefined dynamic_lookup linker flags")
 endif()
 
 MESSAGE("serial: ${Boost_SERIALIZATION_LIBRARY}")
 MESSAGE("THREAD: ${RDKit_THREAD_LIBS}")
 
-# Install the SWIG wrapper (MODULE library type)
-# For MODULE targets, both LIBRARY (Linux) and RUNTIME (Windows) are needed
-# macOS .bundle files are installed via LIBRARY destination with CMake 3.18+
-install(TARGETS RDKitChem
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib
-)
+INSTALL(TARGETS RDKitChem LIBRARY DESTINATION lib)
