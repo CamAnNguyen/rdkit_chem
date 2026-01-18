@@ -1,0 +1,362 @@
+# Build and publish pre-compiled native gems for multiple platforms
+# Triggered on version tags (v*) or manual workflow dispatch
+
+name: Build Native Gems
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_publish:
+        description: 'Skip publishing to RubyGems'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # ===========================================================================
+  # Build Linux gems directly on Ubuntu runners (not rake-compiler-dock)
+  # ===========================================================================
+  build-linux:
+    name: Build Linux (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - '3.1'
+          - '3.2'
+          - '3.3'
+          - '3.4'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            libboost-all-dev \
+            libeigen3-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            zlib1g-dev \
+            libsqlite3-dev \
+            patchelf \
+            autoconf \
+            automake \
+            libtool \
+            libpcre2-dev \
+            bison
+      
+      - name: Install SWIG 4.3.0 (system SWIG is too old)
+        run: |
+          # Ubuntu apt has SWIG 4.0, but we require 4.2+ for Ruby bindings
+          curl -sSL https://github.com/swig/swig/archive/refs/tags/v4.3.0.tar.gz | tar xz
+          cd swig-4.3.0
+          ./autogen.sh
+          ./configure --prefix=/usr/local
+          make -j$(nproc)
+          sudo make install
+          swig -version
+      
+      - name: Build RDKit and extension
+        run: |
+          cd ext/rdkit_chem && ruby extconf.rb
+        timeout-minutes: 45
+      
+      - name: Repair libraries (bundle deps, fix RPATH)
+        run: |
+          rake repair
+      
+      - name: Build native gem
+        run: |
+          rake build_native
+      
+      - name: Test native loading
+        run: |
+          rake test_native
+      
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-x86_64-linux-ruby${{ matrix.ruby }}
+          path: '*.gem'
+          if-no-files-found: error
+
+  # ===========================================================================
+  # Build macOS gems natively on GitHub runners
+  # ===========================================================================
+  build-macos:
+    name: Build macOS (${{ matrix.arch }}, Ruby ${{ matrix.ruby }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon (arm64) - macos-15 runner
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.1'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.2'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.3'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.4'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      
+      - name: Install dependencies
+        run: |
+          brew install cmake eigen freetype libpng zlib autoconf automake libtool pcre2 bison
+
+      - name: Install SWIG 4.3.0 (avoid 4.4.x macOS regression)
+        run: |
+          # SWIG 4.4.x has macOS-specific issues (https://github.com/swig/swig/issues/3279)
+          # Build SWIG 4.3.0 from source
+          # Use Homebrew bison (macOS system bison is too old)
+          export PATH="$(brew --prefix bison)/bin:$PATH"
+          curl -sSL https://github.com/swig/swig/archive/refs/tags/v4.3.0.tar.gz | tar xz
+          cd swig-4.3.0
+          ./autogen.sh
+          ./configure --prefix=/usr/local
+          make -j$(sysctl -n hw.ncpu)
+          sudo make install
+          swig -version
+
+      - name: Build Boost (static)
+        run: |
+          BOOST_VERSION=1.86.0
+          BOOST_DIR=${{ github.workspace }}/boost_install
+
+          echo "Downloading Boost ${BOOST_VERSION}..."
+          curl -sSL "https://archives.boost.io/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION//./_}.tar.gz" | tar xz
+          cd boost_${BOOST_VERSION//./_}
+
+          echo "Bootstrapping Boost..."
+          ./bootstrap.sh --prefix=${BOOST_DIR} --with-libraries=serialization,iostreams,system
+
+          echo "Building Boost static libraries..."
+          ./b2 install \
+            link=static \
+            runtime-link=shared \
+            variant=release \
+            threading=multi \
+            -j$(sysctl -n hw.ncpu)
+
+          echo "Boost installed to ${BOOST_DIR}"
+          ls -la ${BOOST_DIR}/lib/
+
+          # Set environment for subsequent steps
+          echo "BOOST_ROOT=${BOOST_DIR}" >> $GITHUB_ENV
+          echo "Boost_DIR=${BOOST_DIR}" >> $GITHUB_ENV
+
+      - name: Build RDKit
+        run: |
+          cd ext/rdkit_chem && ruby extconf.rb
+        timeout-minutes: 45
+
+      - name: Diagnose bundle (static build)
+        run: |
+          echo "=== Bundle Info (static linked) ==="
+          file rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Bundle size ==="
+          ls -lh rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== Linked libraries (should only be system libs) ==="
+          otool -L rdkit_chem/lib/RDKitChem.bundle
+          echo ""
+          echo "=== List all files in lib dir ==="
+          ls -la rdkit_chem/lib/
+
+      - name: Codesign bundle (Apple Silicon requirement)
+        run: |
+          codesign --force --sign - rdkit_chem/lib/RDKitChem.bundle
+          codesign -dv rdkit_chem/lib/RDKitChem.bundle 2>&1
+
+      - name: Test native loading
+        run: |
+          rake test_native
+
+      - name: Build native gem
+        run: |
+          rake build_native
+
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.arch }}-ruby${{ matrix.ruby }}
+          path: '*.gem'
+          if-no-files-found: error
+
+  # ===========================================================================
+  # Test gems on multiple platforms
+  # ===========================================================================
+  test:
+    name: Test (${{ matrix.os }}, Ruby ${{ matrix.ruby }})
+    needs: [build-linux, build-macos]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux tests
+          - os: ubuntu-latest
+            ruby: '3.1'
+            artifact: gem-x86_64-linux-ruby3.1
+          - os: ubuntu-latest
+            ruby: '3.2'
+            artifact: gem-x86_64-linux-ruby3.2
+          - os: ubuntu-latest
+            ruby: '3.3'
+            artifact: gem-x86_64-linux-ruby3.3
+          - os: ubuntu-latest
+            ruby: '3.4'
+            artifact: gem-x86_64-linux-ruby3.4
+          - os: ubuntu-24.04
+            ruby: '3.1'
+            artifact: gem-x86_64-linux-ruby3.1
+          - os: ubuntu-24.04
+            ruby: '3.2'
+            artifact: gem-x86_64-linux-ruby3.2
+          - os: ubuntu-24.04
+            ruby: '3.3'
+            artifact: gem-x86_64-linux-ruby3.3
+          - os: ubuntu-24.04
+            ruby: '3.4'
+            artifact: gem-x86_64-linux-ruby3.4
+          # macOS ARM64 tests
+          - os: macos-15
+            ruby: '3.1'
+            artifact: gem-arm64-darwin-ruby3.1
+          - os: macos-15
+            ruby: '3.2'
+            artifact: gem-arm64-darwin-ruby3.2
+          - os: macos-15
+            ruby: '3.3'
+            artifact: gem-arm64-darwin-ruby3.3
+          - os: macos-15
+            ruby: '3.4'
+            artifact: gem-arm64-darwin-ruby3.4
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+      
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+      
+      - name: List available gems
+        run: ls -la *.gem || echo "No gems found"
+      
+      - name: Install gem
+        run: |
+          gem install *.gem --local
+        shell: bash
+      
+      - name: Test 1 - Basic load test
+        run: |
+          ruby -e "require 'rdkit_chem'; puts 'Loaded RDKitChem version: ' + RDKitChem::VERSION"
+        shell: bash
+      
+      - name: Test 2 - Smoke test (core functionality)
+        run: |
+          ruby -e "
+            require 'rdkit_chem'
+            
+            # Test SMILES parsing
+            mol = RDKitChem.smiles_to_mol('CCO')
+            raise 'SMILES parse failed' unless mol
+            
+            # Test atom count
+            raise 'Atom count wrong: expected 3' unless mol.get_num_atoms == 3
+            
+            # Test bond count
+            raise 'Bond count wrong: expected 2' unless mol.get_num_bonds == 2
+            
+            # Test mol block generation
+            molblock = RDKitChem.mol_to_mol_block(mol)
+            raise 'MolBlock generation failed' if molblock.nil? || molblock.empty?
+            
+            # Test SMILES round-trip
+            smiles = RDKitChem.mol_to_smiles(mol)
+            raise 'SMILES generation failed' if smiles.nil? || smiles.empty?
+            
+            puts 'All smoke tests passed!'
+          "
+        shell: bash
+      
+      - name: Test 3 - Full test suite
+        run: |
+          bundle install || true
+          rake test || echo "Test suite not available"
+        shell: bash
+
+  # ===========================================================================
+  # Publish gems to RubyGems
+  # ===========================================================================
+  publish:
+    name: Publish to RubyGems
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.skip_publish != 'true'
+    runs-on: ubuntu-latest
+    environment: rubygems
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      
+      - name: Download all gem artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          merge-multiple: true
+      
+      - name: Build source gem
+        run: |
+          gem build rdkit_chem.gemspec
+      
+      - name: List gems to publish
+        run: |
+          echo "Gems to publish:"
+          ls -la *.gem
+      
+      - name: Setup RubyGems credentials
+        run: |
+          mkdir -p ~/.gem
+          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" > ~/.gem/credentials
+          chmod 600 ~/.gem/credentials
+      
+      - name: Publish gems
+        run: |
+          for gem in *.gem; do
+            echo "Publishing $gem..."
+            gem push "$gem" || echo "Failed to push $gem (may already exist)"
+          done

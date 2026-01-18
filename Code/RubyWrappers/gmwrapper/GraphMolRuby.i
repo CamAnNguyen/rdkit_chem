@@ -31,6 +31,8 @@
 */
 %module RDKitChem
 
+
+
 #if defined(SWIGWORDSIZE64)
 %{
 // There's a problem with SWIG, 64bit windows, and modern VC++ versions
@@ -84,9 +86,8 @@
 
 %include "std_string.i"
 %include "std_list.i"
-%include "std_vector.i"
 %include "extend_std_vector.i"
-%include "std_map.i"
+%include <std_map.i>
 %include "std_pair.i"
 %include "carrays.i"
 

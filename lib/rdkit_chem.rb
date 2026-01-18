@@ -11,9 +11,7 @@ def find_rdkit_native_extension
 
   # Location 1: Pre-compiled gem (platform-specific)
   precompiled_path = File.expand_path("rdkit_chem/#{ruby_version}", __dir__)
-  if File.directory?(precompiled_path)
-    return precompiled_path
-  end
+  return precompiled_path if File.directory?(precompiled_path)
 
   # Location 2: Source-compiled gem (legacy rdkit_chem/lib/)
   source_compiled_path = File.expand_path('../rdkit_chem/lib', __dir__)
@@ -22,11 +20,34 @@ def find_rdkit_native_extension
     return source_compiled_path
   end
 
-  raise LoadError, "Cannot find RDKitChem native extension. " \
+  raise LoadError, 'Cannot find RDKitChem native extension. ' \
                    "Searched in:\n  - #{precompiled_path}\n  - #{source_compiled_path}"
+end
+
+def preload_rdkit_dylibs(native_path)
+  return unless RUBY_PLATFORM.match?(/darwin/)
+
+  bundle_path = File.join(native_path, 'RDKitChem.bundle')
+  if File.exist?(bundle_path)
+    bundle_size = File.size(bundle_path)
+    return if bundle_size > 10_000_000
+  end
+
+  require 'fiddle'
+
+  dylibs = Dir.glob(File.join(native_path, 'libRDKit*.dylib')).sort
+  return if dylibs.empty?
+
+  @rdkit_handles ||= []
+  dylibs.each do |lib|
+    @rdkit_handles << Fiddle::Handle.new(lib, Fiddle::RTLD_NOW | Fiddle::RTLD_GLOBAL)
+  rescue ArgumentError
+    @rdkit_handles << Fiddle::Handle.new(lib)
+  end
 end
 
 native_path = find_rdkit_native_extension
 $LOAD_PATH.unshift(native_path) unless $LOAD_PATH.include?(native_path)
+preload_rdkit_dylibs(native_path)
 
 require 'RDKitChem'
