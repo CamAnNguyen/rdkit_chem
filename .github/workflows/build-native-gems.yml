@@ -1,0 +1,299 @@
+name: Build Native Gems
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_publish:
+        description: 'Skip publishing to RubyGems'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  RDKIT_COMMIT: c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1
+
+jobs:
+  build-linux:
+    name: Build Linux (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.1', '3.2', '3.3', '3.4']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            libeigen3-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            zlib1g-dev \
+            libsqlite3-dev \
+            patchelf \
+            build-essential \
+            libpcre2-dev \
+            bison
+      
+      - name: Install Boost and SWIG (compile from source for max compatibility)
+        run: |
+          echo "=== Compiling SWIG 4.2.1 from source ==="
+          cd /tmp
+          curl -L -o swig-4.2.1.tar.gz https://github.com/swig/swig/archive/refs/tags/v4.2.1.tar.gz
+          tar xzf swig-4.2.1.tar.gz
+          cd swig-4.2.1
+          ./autogen.sh
+          ./configure --prefix=/usr/local
+          make -j$(nproc)
+          sudo make install
+          
+          echo "=== Compiling Boost 1.83 from source ==="
+          cd /tmp
+          curl -L -o boost_1_83_0.tar.bz2 https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.bz2
+          tar xjf boost_1_83_0.tar.bz2
+          cd boost_1_83_0
+          ./bootstrap.sh --prefix=/usr/local --with-libraries=serialization,iostreams,system,filesystem,regex
+          sudo ./b2 install -j$(nproc) link=shared runtime-link=shared
+          sudo ldconfig
+      
+      - name: Build RDKit and extension
+        run: |
+          cd ext/rdkit_chem && ruby extconf.rb
+        timeout-minutes: 60
+      
+      - name: Repair libraries (bundle deps, fix RPATH)
+        run: |
+          rake repair
+      
+      - name: Build native gem
+        run: |
+          rake build_native
+
+      - name: Validate gem artifact
+        run: |
+          ls -la *.gem
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
+          sha256sum *.gem
+      
+      - name: Test native loading
+        run: |
+          rake test_native
+      
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-x86_64-linux-ruby${{ matrix.ruby }}
+          path: '*.gem'
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }}, Ruby ${{ matrix.ruby }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.1'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.2'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.3'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.4'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      
+      - name: Install dependencies
+        run: |
+          brew install cmake boost eigen swig freetype libpng
+      
+      - name: Build RDKit
+        run: |
+          cd ext/rdkit_chem && ruby extconf.rb
+        timeout-minutes: 45
+      
+      - name: Repair libraries (install_name_tool)
+        run: |
+          rake repair_macos || rake fix_rpath
+      
+      - name: Build native gem
+        run: |
+          rake build_native
+
+      - name: Validate gem artifact
+        run: |
+          ls -la *.gem
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
+          shasum -a 256 *.gem
+      
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.arch }}-ruby${{ matrix.ruby }}
+          path: '*.gem'
+          if-no-files-found: error
+
+  test-linux-container:
+    name: Test Fresh Container (Ruby ${{ matrix.ruby }})
+    needs: build-linux
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.1', '3.2', '3.3', '3.4']
+    container:
+      image: ruby:${{ matrix.ruby }}-slim
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gem-x86_64-linux-ruby${{ matrix.ruby }}
+          path: artifacts
+      
+      - name: Install minimal runtime dependencies
+        run: |
+          apt-get update
+          apt-get install -y libgomp1 libcairo2
+      
+      - name: Install gem
+        run: |
+          gem install artifacts/*.gem --no-document
+      
+      - name: Test - Basic load
+        run: |
+          ruby -e "require 'rdkit_chem'; puts 'RDKitChem loaded: ' + RDKitChem::VERSION"
+      
+      - name: Test - Core functionality
+        run: |
+          ruby -e "
+            require 'rdkit_chem'
+            mol = RDKitChem::RWMol.mol_from_smiles('CCO')
+            raise 'SMILES failed' unless mol && mol.get_num_atoms == 3
+            mdl = mol.mol_to_mol_block(true, -1, false)
+            raise 'MolBlock failed' unless mdl.include?('V2000') || mdl.include?('V3000')
+            mol2 = RDKitChem::RWMol.mol_from_mol_block(mdl)
+            raise 'Round-trip failed' unless mol2.get_num_atoms == 3
+            puts 'All tests passed!'
+          "
+      
+      - name: Test - Full suite
+        run: |
+          gem install test-unit --no-document
+          ruby -Itest test/test_rdkit_chem.rb
+
+  test-macos:
+    name: Test macOS (Ruby ${{ matrix.ruby }})
+    needs: build-macos
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.1', '3.2', '3.3', '3.4']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+      
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gem-arm64-darwin-ruby${{ matrix.ruby }}
+          path: artifacts
+      
+      - name: Install gem
+        run: gem install artifacts/*.gem --no-document
+      
+      - name: Test - Basic load
+        run: |
+          ruby -e "require 'rdkit_chem'; puts 'RDKitChem loaded: ' + RDKitChem::VERSION"
+      
+      - name: Test - Core functionality
+        run: |
+          ruby -e "
+            require 'rdkit_chem'
+            mol = RDKitChem::RWMol.mol_from_smiles('CCO')
+            raise 'SMILES failed' unless mol && mol.get_num_atoms == 3
+            mdl = mol.mol_to_mol_block(true, -1, false)
+            raise 'MolBlock failed' unless mdl.include?('V2000') || mdl.include?('V3000')
+            mol2 = RDKitChem::RWMol.mol_from_mol_block(mdl)
+            raise 'Round-trip failed' unless mol2.get_num_atoms == 3
+            puts 'All tests passed!'
+          "
+      
+      - name: Test - Full suite
+        run: |
+          gem install test-unit --no-document
+          ruby -Itest test/test_rdkit_chem.rb
+
+  publish:
+    name: Publish to RubyGems
+    needs: [test-linux-container, test-macos]
+    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.skip_publish != 'true'
+    runs-on: ubuntu-latest
+    environment: rubygems
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      
+      - name: Download all gem artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          merge-multiple: true
+      
+      - name: Build source gem
+        run: |
+          gem build rdkit_chem.gemspec
+      
+      - name: List gems to publish
+        run: |
+          echo "Gems to publish:"
+          ls -la *.gem
+      
+      - name: Setup RubyGems credentials
+        run: |
+          mkdir -p ~/.gem
+          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" > ~/.gem/credentials
+          chmod 600 ~/.gem/credentials
+      
+      - name: Publish gems
+        run: |
+          for gem in *.gem; do
+            echo "Publishing $gem..."
+            gem push "$gem" || echo "Failed to push $gem (may already exist)"
+          done

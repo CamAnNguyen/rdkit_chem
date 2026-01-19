@@ -2,6 +2,7 @@
 
 require 'rake/testtask'
 require 'fileutils'
+require 'set'
 
 # Load version
 $LOAD_PATH.unshift File.expand_path('lib', __dir__)
@@ -29,12 +30,14 @@ task :build do
   sh 'gem build rdkit_chem.gemspec'
 end
 
-desc 'Build pre-compiled gem for current platform (x86_64-linux)'
+desc 'Build pre-compiled gem for current platform'
 task :build_native do
-  # Check that native libraries exist
-  unless File.exist?(File.join(NATIVE_DIR, 'RDKitChem.so'))
-    abort "ERROR: Native extension not found at #{NATIVE_DIR}/RDKitChem.so\n" \
-          "Run 'gem install rdkit_chem' first to compile, or build manually."
+  ext_so = File.join(NATIVE_DIR, 'RDKitChem.so')
+  ext_bundle = File.join(NATIVE_DIR, 'RDKitChem.bundle')
+
+  unless File.exist?(ext_so) || File.exist?(ext_bundle)
+    abort "ERROR: Native extension not found at #{NATIVE_DIR}/RDKitChem.{so,bundle}\n" \
+          "Run 'cd ext/rdkit_chem && ruby extconf.rb' first to compile."
   end
 
   # Get Ruby version for directory structure
@@ -47,21 +50,28 @@ task :build_native do
   FileUtils.mkdir_p(target_dir)
 
   # Copy native extension and all shared libraries
-  Dir.glob("#{NATIVE_DIR}/*.so*").each do |lib|
-    # Skip symlinks, copy only real files
-    next if File.symlink?(lib)
-    dest = File.join(target_dir, File.basename(lib))
-    FileUtils.cp(lib, dest, verbose: true)
+  # Linux: *.so*, macOS: *.bundle and *.dylib
+  lib_patterns = ["#{NATIVE_DIR}/*.so*", "#{NATIVE_DIR}/*.bundle", "#{NATIVE_DIR}/*.dylib"]
+  
+  lib_patterns.each do |pattern|
+    Dir.glob(pattern).each do |lib|
+      # Skip symlinks first pass, copy only real files
+      next if File.symlink?(lib)
+      dest = File.join(target_dir, File.basename(lib))
+      FileUtils.cp(lib, dest, verbose: true)
+    end
   end
 
   # Also copy symlinks (they're needed for library resolution)
   # This includes both .so -> .so.1 and .so.1 -> .so.1.version symlinks
-  Dir.glob("#{NATIVE_DIR}/*.so*").each do |lib|
-    next unless File.symlink?(lib)
-    link_target = File.readlink(lib)
-    dest = File.join(target_dir, File.basename(lib))
-    FileUtils.rm_f(dest)
-    FileUtils.ln_s(link_target, dest, verbose: true)
+  lib_patterns.each do |pattern|
+    Dir.glob(pattern).each do |lib|
+      next unless File.symlink?(lib)
+      link_target = File.readlink(lib)
+      dest = File.join(target_dir, File.basename(lib))
+      FileUtils.rm_f(dest)
+      FileUtils.ln_s(link_target, dest, verbose: true)
+    end
   end
 
   # Build the platform-specific gem
@@ -135,6 +145,82 @@ task :fix_rpath do
   # Verify main extension
   puts "\nVerifying RPATH on #{so_file}:"
   sh "readelf -d #{so_file} | grep -E '(RPATH|RUNPATH)' || echo 'No RPATH found'"
+end
+
+desc 'Repair: bundle system libraries and fix RPATH'
+task :repair do
+  Rake::Task['bundle_system_libs'].invoke
+  Rake::Task['fix_rpath'].invoke
+end
+
+MACOS_SYSTEM_LIBRARY_PREFIXES = ['/usr/lib/', '/System/'].freeze
+MACOS_DEFAULT_SEARCH_PATHS = ['/opt/homebrew/lib', '/usr/local/lib'].freeze
+
+def macos_shared_libraries(libs_dir)
+  Dir.glob("#{libs_dir}/*.dylib") + Dir.glob("#{libs_dir}/*.bundle")
+end
+
+def macos_dependencies(lib)
+  otool_output = `otool -L '#{lib}' 2>/dev/null`
+  otool_output.lines.drop(1).map { |line| line.strip.split(' ').first }.compact
+end
+
+def macos_system_library?(path)
+  MACOS_SYSTEM_LIBRARY_PREFIXES.any? { |prefix| path.start_with?(prefix) }
+end
+
+def macos_resolve_dependency(dep, libs_dir)
+  return dep if dep.start_with?('/') && File.exist?(dep)
+
+  basename = File.basename(dep)
+  candidates = [File.join(libs_dir, basename)] +
+               MACOS_DEFAULT_SEARCH_PATHS.map { |dir| File.join(dir, basename) }
+  candidates.find { |path| File.exist?(path) }
+end
+
+desc 'Repair for macOS (bundle deps and fix install names)'
+task :repair_macos do
+  libs_dir = File.expand_path(NATIVE_DIR)
+  libs = macos_shared_libraries(libs_dir)
+  abort "ERROR: no macOS libraries found in #{libs_dir}" if libs.empty?
+
+  queue = libs.dup
+  processed = Set.new
+  copied = 0
+
+  until queue.empty?
+    lib = queue.shift
+    next if processed.include?(lib)
+    processed.add(lib)
+
+    macos_dependencies(lib).each do |dep|
+      next if macos_system_library?(dep)
+
+      dep_path = macos_resolve_dependency(dep, libs_dir)
+      next if dep_path.nil?
+
+      dest = File.join(libs_dir, File.basename(dep_path))
+      unless File.exist?(dest)
+        FileUtils.cp(dep_path, dest, verbose: true)
+        copied += 1
+      end
+      queue << dest if File.exist?(dest)
+    end
+  end
+
+  macos_shared_libraries(libs_dir).each do |lib|
+    lib_name = File.basename(lib)
+    system("install_name_tool -id @loader_path/#{lib_name} '#{lib}' 2>/dev/null") if lib.end_with?('.dylib')
+
+    macos_dependencies(lib).each do |dep|
+      next if macos_system_library?(dep)
+
+      dep_basename = File.basename(dep)
+      system("install_name_tool -change '#{dep}' '@loader_path/#{dep_basename}' '#{lib}' 2>/dev/null")
+    end
+  end
+
+  puts "Bundled #{copied} macOS dependencies."
 end
 
 desc 'Test that native extension loads without LD_LIBRARY_PATH'

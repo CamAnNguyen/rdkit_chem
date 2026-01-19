@@ -55,6 +55,12 @@ SET(CMAKE_SWIG_FLAGS -small -naturalvar -autorename)
 
 SWIG_ADD_LIBRARY(RDKitChem TYPE MODULE LANGUAGE ruby SOURCES GraphMolRuby.i)
 
+if(APPLE)
+  set_target_properties(RDKitChem PROPERTIES
+    LINK_FLAGS "-undefined dynamic_lookup"
+    SUFFIX ".bundle")
+endif()
+
 # it doesnt seem like the threading libs should need to be here, but
 # as of Oct 2012 using boost 1.51 under at least ubuntu 12.04 we get a
 # link error if they aren't there.

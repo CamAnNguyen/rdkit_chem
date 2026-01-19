@@ -44,6 +44,13 @@
 
 %template(RWMol_Vect) std::vector< boost::shared_ptr<RDKit::RWMol> >;
 
+/*
+ * Special handling for Conformer objects which should not be GCed until the molecule is destroyed
+ * We ignore the original addConformer and provide our own in %extend that copies the conformer
+ * to avoid double-free issues with shared_ptr wrappers.
+ */
+%ignore RDKit::RWMol::addConformer;
+
 // ignore the methods that allow the molecule to take ownership of atoms/Bonds
 // (instead of copying them). This just leads to memory problems with Ruby
 %ignore RDKit::RWMol::addAtom(Atom *atom,bool updateLabel,bool takeOwnership);
@@ -78,6 +85,20 @@
 %include <GraphMol/RWMol.h>
 
 %extend RDKit::RWMol {
+  /* Create a copy of the conformer before adding it to the molecule.
+     This avoids the double-free issue since Ruby owns the original and C++ owns the copy.
+     The original DISOWN approach doesn't work with shared_ptr wrappers. */
+  unsigned int addConf(RDKit::Conformer *conf, bool assignId=false) {
+    RDKit::Conformer *confCopy = new RDKit::Conformer(*conf);
+    return self->addConformer(confCopy, assignId);
+  }
+
+  // Alias for addConf - exposes as add_conformer in Ruby
+  unsigned int addConformer(RDKit::Conformer *conf, bool assignId=false) {
+    RDKit::Conformer *confCopy = new RDKit::Conformer(*conf);
+    return self->addConformer(confCopy, assignId);
+  }
+
   static RDKit::RWMOL_SPTR MolFromSmiles(const std::string &smi,int debugParse=0,bool sanitize=1,
                                          std::map<std::string,std::string> *replacements=0){
     return RDKit::RWMOL_SPTR(RDKit::SmilesToMol(smi, debugParse, sanitize,replacements));
