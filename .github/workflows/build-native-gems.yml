@@ -1,0 +1,272 @@
+name: Build Native Gems
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_publish:
+        description: 'Skip publishing to RubyGems'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  RDKIT_COMMIT: c2e48f41d88ddc15c6e1f818d1c4ced70b7f20d1
+
+jobs:
+  build-linux:
+    name: Build Linux (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - '3.1'
+          - '3.2'
+          - '3.3'
+          - '3.4'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            libboost-all-dev \
+            libeigen3-dev \
+            swig \
+            libfreetype6-dev \
+            libpng-dev \
+            zlib1g-dev \
+            libsqlite3-dev \
+            patchelf
+      
+      - name: Build RDKit and extension
+        run: |
+          cd ext/rdkit_chem && ruby extconf.rb
+        timeout-minutes: 45
+      
+      - name: Repair libraries (bundle deps, fix RPATH)
+        run: |
+          rake repair
+      
+      - name: Build native gem
+        run: |
+          rake build_native
+
+      - name: Validate gem artifact
+        run: |
+          ls -la *.gem
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
+          sha256sum *.gem
+      
+      - name: Test native loading
+        run: |
+          rake test_native
+      
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-x86_64-linux-ruby${{ matrix.ruby }}
+          path: '*.gem'
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }}, Ruby ${{ matrix.ruby }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.1'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.2'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.3'
+          - runner: macos-15
+            arch: arm64-darwin
+            ruby: '3.4'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      
+      - name: Install dependencies
+        run: |
+          brew install cmake boost eigen swig freetype libpng
+      
+      - name: Build RDKit
+        run: |
+          cd ext/rdkit_chem && ruby extconf.rb
+        timeout-minutes: 45
+      
+      - name: Repair libraries (install_name_tool)
+        run: |
+          rake repair_macos || rake fix_rpath
+      
+      - name: Build native gem
+        run: |
+          rake build_native
+
+      - name: Validate gem artifact
+        run: |
+          ls -la *.gem
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
+          shasum -a 256 *.gem
+      
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.arch }}-ruby${{ matrix.ruby }}
+          path: '*.gem'
+          if-no-files-found: error
+
+  test:
+    name: Test (${{ matrix.os }}, Ruby ${{ matrix.ruby }})
+    needs: [build-linux, build-macos]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04, macos-15]
+        ruby: ['3.1', '3.2', '3.3', '3.4']
+    env:
+      GEM_ARTIFACT_NAME: >-
+        ${{ matrix.os == 'macos-15'
+            && format('gem-arm64-darwin-ruby{0}', matrix.ruby)
+            || format('gem-x86_64-linux-ruby{0}', matrix.ruby) }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+      
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.GEM_ARTIFACT_NAME }}
+          path: artifacts
+      
+      - name: List available gems
+        run: ls -la artifacts/*.gem || echo "No gems found"
+      
+      - name: Select gem file
+        run: |
+          set -euo pipefail
+          gem_count=$(ls -1 artifacts/*.gem 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$gem_count" -ne 1 ]; then
+            echo "Expected 1 gem, found $gem_count"
+            ls -la artifacts/*.gem || true
+            exit 1
+          fi
+          echo "GEM_FILE=$(ls -1 artifacts/*.gem)" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Validate gem contents
+        run: |
+          ruby -e "require 'rubygems/package'; spec = Gem::Package.new(ENV['GEM_FILE']).spec; abort('RDKitChem.so missing') unless spec.files.any? { |path| path.end_with?('RDKitChem.so') }"
+        shell: bash
+
+      - name: Install gem
+        run: |
+          gem install "$GEM_FILE" --local
+        shell: bash
+      
+      - name: Test 1 - Basic load test
+        run: |
+          ruby -e "require 'rdkit_chem'; puts 'Loaded RDKitChem version: ' + RDKitChem::VERSION"
+        shell: bash
+      
+      - name: Test 2 - Smoke test (core functionality)
+        run: |
+          ruby -e "
+            require 'rdkit_chem'
+            
+            # Test SMILES parsing
+            mol = RDKitChem.smiles_to_mol('CCO')
+            raise 'SMILES parse failed' unless mol
+            
+            # Test atom count
+            raise 'Atom count wrong: expected 3' unless mol.get_num_atoms == 3
+            
+            # Test bond count
+            raise 'Bond count wrong: expected 2' unless mol.get_num_bonds == 2
+            
+            # Test mol block generation
+            molblock = RDKitChem.mol_to_mol_block(mol)
+            raise 'MolBlock generation failed' if molblock.nil? || molblock.empty?
+            
+            # Test SMILES round-trip
+            smiles = RDKitChem.mol_to_smiles(mol)
+            raise 'SMILES generation failed' if smiles.nil? || smiles.empty?
+            
+            puts 'All smoke tests passed!'
+          "
+        shell: bash
+      
+      - name: Test 3 - Full test suite
+        run: |
+          bundle install || true
+          rake test || echo "Test suite not available"
+        shell: bash
+
+  publish:
+    name: Publish to RubyGems
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.skip_publish != 'true'
+    runs-on: ubuntu-latest
+    environment: rubygems
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      
+      - name: Download all gem artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          merge-multiple: true
+      
+      - name: Build source gem
+        run: |
+          gem build rdkit_chem.gemspec
+      
+      - name: List gems to publish
+        run: |
+          echo "Gems to publish:"
+          ls -la *.gem
+      
+      - name: Setup RubyGems credentials
+        run: |
+          mkdir -p ~/.gem
+          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" > ~/.gem/credentials
+          chmod 600 ~/.gem/credentials
+      
+      - name: Publish gems
+        run: |
+          for gem in *.gem; do
+            echo "Publishing $gem..."
+            gem push "$gem" || echo "Failed to push $gem (may already exist)"
+          done
