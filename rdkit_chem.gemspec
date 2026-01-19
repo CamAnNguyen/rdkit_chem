@@ -24,17 +24,16 @@ Gem::Specification.new do |s|
     'LICENSE'
   ]
 
-  # Platform-specific gems include pre-compiled binaries
-  # Source gems use the extension for compilation
-  ruby_version_dir = "#{RUBY_VERSION.split('.')[0..1].join('.')}.0"
-  precompiled_dir = File.join(__dir__, 'lib', 'rdkit_chem', ruby_version_dir)
+  staged_dirs = Dir.glob(File.join(__dir__, 'lib', 'rdkit_chem', '*.0'))
+                   .select { |d| File.directory?(d) }
 
-  if ENV['RDKIT_PRECOMPILED'] || File.directory?(precompiled_dir)
-    # Pre-compiled binary gem - include the native libraries
-    s.files += Dir["lib/rdkit_chem/#{ruby_version_dir}/**/*"]
+  if ENV['RDKIT_PRECOMPILED'] || staged_dirs.any?
+    staged_dirs.each do |dir|
+      version_dir = File.basename(dir)
+      s.files += Dir["lib/rdkit_chem/#{version_dir}/**/*"]
+    end
     s.platform = Gem::Platform::CURRENT
   else
-    # Source gem - requires compilation during install
     s.extensions = ['ext/rdkit_chem/extconf.rb']
   end
 
