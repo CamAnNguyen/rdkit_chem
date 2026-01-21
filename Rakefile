@@ -4,6 +4,9 @@ require 'rake/testtask'
 require 'fileutils'
 require 'set'
 
+# Load additional tasks from tasks/ directory
+Dir.glob('tasks/**/*.rake').each { |r| load r }
+
 # Load version
 $LOAD_PATH.unshift File.expand_path('lib', __dir__)
 require 'rdkit_chem/version'
