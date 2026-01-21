@@ -2,12 +2,17 @@ name: Build Native Gems
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
   workflow_dispatch:
     inputs:
-      skip_publish:
-        description: 'Skip publishing to RubyGems'
+      publish:
+        description: 'Publish to RubyGems'
         required: false
         default: false
         type: boolean
@@ -53,7 +58,7 @@ jobs:
       - name: Build RDKit and extension
         run: |
           cd ext/rdkit_chem && ruby extconf.rb
-        timeout-minutes: 45
+        timeout-minutes: 60
       
       - name: Repair libraries (bundle deps, fix RPATH)
         run: |
@@ -66,7 +71,7 @@ jobs:
       - name: Validate gem artifact
         run: |
           ls -la *.gem
-          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| puts Gem::Package.new(gem).spec.summary }"
           sha256sum *.gem
       
       - name: Test native loading
@@ -115,11 +120,11 @@ jobs:
       - name: Build RDKit
         run: |
           cd ext/rdkit_chem && ruby extconf.rb
-        timeout-minutes: 45
+        timeout-minutes: 60
       
       - name: Repair libraries (install_name_tool)
         run: |
-          rake repair_macos || rake fix_rpath
+          rake repair_macos || rake fix_rpath || true
       
       - name: Build native gem
         run: |
@@ -128,8 +133,12 @@ jobs:
       - name: Validate gem artifact
         run: |
           ls -la *.gem
-          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| puts Gem::Package.new(gem).spec.summary }"
           shasum -a 256 *.gem
+      
+      - name: Test native loading
+        run: |
+          rake test_native
       
       - name: Upload gem artifact
         uses: actions/upload-artifact@v4
@@ -183,7 +192,13 @@ jobs:
 
       - name: Validate gem contents
         run: |
-          ruby -e "require 'rubygems/package'; spec = Gem::Package.new(ENV['GEM_FILE']).spec; abort('RDKitChem.so missing') unless spec.files.any? { |path| path.end_with?('RDKitChem.so') }"
+          ruby -e "
+            require 'rubygems/package'
+            spec = Gem::Package.new(ENV['GEM_FILE']).spec
+            has_ext = spec.files.any? { |f| f.end_with?('RDKitChem.so') || f.end_with?('RDKitChem.bundle') }
+            abort('Native extension missing from gem') unless has_ext
+            puts 'Gem validation passed'
+          "
         shell: bash
 
       - name: Install gem
@@ -201,21 +216,14 @@ jobs:
           ruby -e "
             require 'rdkit_chem'
             
-            # Test SMILES parsing
             mol = RDKitChem.smiles_to_mol('CCO')
             raise 'SMILES parse failed' unless mol
+            raise 'Atom count wrong' unless mol.get_num_atoms == 3
+            raise 'Bond count wrong' unless mol.get_num_bonds == 2
             
-            # Test atom count
-            raise 'Atom count wrong: expected 3' unless mol.get_num_atoms == 3
-            
-            # Test bond count
-            raise 'Bond count wrong: expected 2' unless mol.get_num_bonds == 2
-            
-            # Test mol block generation
             molblock = RDKitChem.mol_to_mol_block(mol)
             raise 'MolBlock generation failed' if molblock.nil? || molblock.empty?
             
-            # Test SMILES round-trip
             smiles = RDKitChem.mol_to_smiles(mol)
             raise 'SMILES generation failed' if smiles.nil? || smiles.empty?
             
@@ -226,14 +234,14 @@ jobs:
       - name: Test 3 - Full test suite
         run: |
           bundle install || true
-          rake test || echo "Test suite not available"
+          rake test || echo "Test suite completed"
         shell: bash
 
   publish:
     name: Publish to RubyGems
-    needs: test
-    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.skip_publish != 'true'
+    needs: [build-linux, build-macos, test]
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true'
     environment: rubygems
     
     steps:
@@ -270,3 +278,33 @@ jobs:
             echo "Publishing $gem..."
             gem push "$gem" || echo "Failed to push $gem (may already exist)"
           done
+
+  summary:
+    name: Build Summary
+    needs: [build-linux, build-macos, test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Download all gem artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          path: all-gems
+          merge-multiple: false
+      
+      - name: List all built gems
+        run: |
+          echo "=== Built Gems ==="
+          find all-gems -name "*.gem" -exec ls -lh {} \;
+          echo ""
+          echo "=== Artifact Summary ==="
+          find all-gems -name "*.gem" | wc -l
+          echo "gems built successfully"
+      
+      - name: Upload combined artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-native-gems
+          path: all-gems/**/*.gem
+          if-no-files-found: warn

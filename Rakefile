@@ -33,47 +33,57 @@ task :build do
   sh 'gem build rdkit_chem.gemspec'
 end
 
-desc 'Build pre-compiled gem for current platform (x86_64-linux)'
+desc 'Build pre-compiled gem for current platform'
 task :build_native do
-  # Check that native libraries exist
-  unless File.exist?(File.join(NATIVE_DIR, 'RDKitChem.so'))
-    abort "ERROR: Native extension not found at #{NATIVE_DIR}/RDKitChem.so\n" \
-          "Run 'gem install rdkit_chem' first to compile, or build manually."
+  ext_so = File.join(NATIVE_DIR, 'RDKitChem.so')
+  ext_bundle = File.join(NATIVE_DIR, 'RDKitChem.bundle')
+  
+  unless File.exist?(ext_so) || File.exist?(ext_bundle)
+    abort "ERROR: Native extension not found at #{NATIVE_DIR}/RDKitChem.{so,bundle}\n" \
+          "Run 'cd ext/rdkit_chem && ruby extconf.rb' first to compile."
   end
 
-  # Get Ruby version for directory structure
   ruby_version = "#{RUBY_VERSION.split('.')[0..1].join('.')}.0"
   target_dir = "lib/rdkit_chem/#{ruby_version}"
 
   puts "Packaging pre-compiled gem for Ruby #{ruby_version}..."
 
-  # Create target directory
   FileUtils.mkdir_p(target_dir)
 
-  # Copy native extension and all shared libraries
-  Dir.glob("#{NATIVE_DIR}/*.so*").each do |lib|
-    # Skip symlinks, copy only real files
-    next if File.symlink?(lib)
-    dest = File.join(target_dir, File.basename(lib))
-    FileUtils.cp(lib, dest, verbose: true)
+  if RUBY_PLATFORM =~ /darwin/
+    Dir.glob("#{NATIVE_DIR}/*.bundle").each do |lib|
+      next if File.symlink?(lib)
+      FileUtils.cp(lib, File.join(target_dir, File.basename(lib)), verbose: true)
+    end
+    Dir.glob("#{NATIVE_DIR}/*.dylib*").each do |lib|
+      next if File.symlink?(lib)
+      FileUtils.cp(lib, File.join(target_dir, File.basename(lib)), verbose: true)
+    end
+    Dir.glob("#{NATIVE_DIR}/*.dylib*").each do |lib|
+      next unless File.symlink?(lib)
+      link_target = File.readlink(lib)
+      dest = File.join(target_dir, File.basename(lib))
+      FileUtils.rm_f(dest)
+      FileUtils.ln_s(link_target, dest, verbose: true)
+    end
+  else
+    Dir.glob("#{NATIVE_DIR}/*.so*").each do |lib|
+      next if File.symlink?(lib)
+      FileUtils.cp(lib, File.join(target_dir, File.basename(lib)), verbose: true)
+    end
+    Dir.glob("#{NATIVE_DIR}/*.so*").each do |lib|
+      next unless File.symlink?(lib)
+      link_target = File.readlink(lib)
+      dest = File.join(target_dir, File.basename(lib))
+      FileUtils.rm_f(dest)
+      FileUtils.ln_s(link_target, dest, verbose: true)
+    end
   end
 
-  # Also copy symlinks (they're needed for library resolution)
-  # This includes both .so -> .so.1 and .so.1 -> .so.1.version symlinks
-  Dir.glob("#{NATIVE_DIR}/*.so*").each do |lib|
-    next unless File.symlink?(lib)
-    link_target = File.readlink(lib)
-    dest = File.join(target_dir, File.basename(lib))
-    FileUtils.rm_f(dest)
-    FileUtils.ln_s(link_target, dest, verbose: true)
-  end
-
-  # Build the platform-specific gem
   ENV['RDKIT_PRECOMPILED'] = '1'
   sh 'gem build rdkit_chem.gemspec'
   ENV.delete('RDKIT_PRECOMPILED')
 
-  # Clean up
   FileUtils.rm_rf(target_dir)
 
   puts "\nBuilt: rdkit_chem-#{VERSION}-#{Gem::Platform.local}.gem"
@@ -217,18 +227,21 @@ task :repair_macos do
   puts "Bundled #{copied} macOS dependencies."
 end
 
-desc 'Test that native extension loads without LD_LIBRARY_PATH'
+desc 'Test that native extension loads without LD_LIBRARY_PATH/DYLD_LIBRARY_PATH'
 task :test_native do
   so_dir = File.expand_path(NATIVE_DIR, __dir__)
   puts "Testing native extension loading from #{so_dir}..."
 
-  # Test without LD_LIBRARY_PATH
-  result = system("ruby -I#{so_dir} -Ilib -e \"require 'rdkit_chem'; puts 'SUCCESS: RDKitChem loaded'\"")
+  result = system("ruby -I#{so_dir} -Ilib -e \"require 'rdkit_chem'; puts 'SUCCESS: RDKitChem ' + RDKitChem::VERSION + ' loaded'\"")
 
   if result
-    puts "\nNative extension loads correctly without LD_LIBRARY_PATH!"
+    puts "\nNative extension loads correctly!"
   else
-    puts "\nFAILED: Still requires LD_LIBRARY_PATH. Run 'rake fix_rpath' first."
+    if RUBY_PLATFORM =~ /darwin/
+      puts "\nFAILED: Run 'rake repair_macos' first."
+    else
+      puts "\nFAILED: Run 'rake repair' first."
+    end
     exit 1
   end
 end
