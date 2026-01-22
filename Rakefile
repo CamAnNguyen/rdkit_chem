@@ -30,8 +30,8 @@ task :build do
   sh 'gem build rdkit_chem.gemspec'
 end
 
-desc 'Build pre-compiled gem for current platform'
-task :build_native do
+desc 'Stage native libraries for current Ruby version (used by CI)'
+task :stage_native do
   ext_so = File.join(NATIVE_DIR, 'RDKitChem.so')
   ext_bundle = File.join(NATIVE_DIR, 'RDKitChem.bundle')
 
@@ -44,7 +44,7 @@ task :build_native do
   ruby_version = "#{RUBY_VERSION.split('.')[0..1].join('.')}.0"
   target_dir = "lib/rdkit_chem/#{ruby_version}"
 
-  puts "Packaging pre-compiled gem for Ruby #{ruby_version}..."
+  puts "Staging native libraries for Ruby #{ruby_version} to #{target_dir}..."
 
   # Create target directory
   FileUtils.mkdir_p(target_dir)
@@ -52,7 +52,7 @@ task :build_native do
   # Copy native extension and all shared libraries
   # Linux: *.so*, macOS: *.bundle and *.dylib
   lib_patterns = ["#{NATIVE_DIR}/*.so*", "#{NATIVE_DIR}/*.bundle", "#{NATIVE_DIR}/*.dylib"]
-  
+
   lib_patterns.each do |pattern|
     Dir.glob(pattern).each do |lib|
       # Skip symlinks first pass, copy only real files
@@ -63,7 +63,6 @@ task :build_native do
   end
 
   # Also copy symlinks (they're needed for library resolution)
-  # This includes both .so -> .so.1 and .so.1 -> .so.1.version symlinks
   lib_patterns.each do |pattern|
     Dir.glob(pattern).each do |lib|
       next unless File.symlink?(lib)
@@ -74,15 +73,57 @@ task :build_native do
     end
   end
 
+  puts "Staged #{Dir.glob("#{target_dir}/*").count} files for Ruby #{ruby_version}"
+end
+
+desc 'Build pre-compiled gem for current platform (single Ruby version)'
+task :build_native do
+  Rake::Task['stage_native'].invoke
+
   # Build the platform-specific gem
   ENV['RDKIT_PRECOMPILED'] = '1'
   sh 'gem build rdkit_chem.gemspec'
   ENV.delete('RDKIT_PRECOMPILED')
 
-  # Clean up
-  FileUtils.rm_rf(target_dir)
+  # Clean up staged files
+  ruby_version = "#{RUBY_VERSION.split('.')[0..1].join('.')}.0"
+  FileUtils.rm_rf("lib/rdkit_chem/#{ruby_version}")
 
   puts "\nBuilt: rdkit_chem-#{VERSION}-#{Gem::Platform.local}.gem"
+end
+
+desc 'Build fat gem containing all staged Ruby versions'
+task :build_fat_gem do
+  staged_dirs = Dir.glob('lib/rdkit_chem/*.0').select { |d| File.directory?(d) }
+
+  if staged_dirs.empty?
+    abort "ERROR: No staged Ruby versions found in lib/rdkit_chem/\n" \
+          "Run 'rake stage_native' for each Ruby version first."
+  end
+
+  puts "Building fat gem with Ruby versions: #{staged_dirs.map { |d| File.basename(d) }.join(', ')}"
+
+  # Verify each staged directory has the extension
+  staged_dirs.each do |dir|
+    unless File.exist?(File.join(dir, 'RDKitChem.so')) || File.exist?(File.join(dir, 'RDKitChem.bundle'))
+      abort "ERROR: #{dir} missing RDKitChem.{so,bundle}"
+    end
+  end
+
+  # Build the platform-specific gem
+  ENV['RDKIT_PRECOMPILED'] = '1'
+  sh 'gem build rdkit_chem.gemspec'
+  ENV.delete('RDKIT_PRECOMPILED')
+
+  puts "\nBuilt fat gem: rdkit_chem-#{VERSION}-#{Gem::Platform.local}.gem"
+  puts "Contains Ruby versions: #{staged_dirs.map { |d| File.basename(d) }.join(', ')}"
+end
+
+desc 'Clean staged native libraries'
+task :clean_staged do
+  Dir.glob('lib/rdkit_chem/*.0').each do |dir|
+    FileUtils.rm_rf(dir, verbose: true)
+  end
 end
 
 desc 'Bundle system libraries (Boost) into native directory'
@@ -247,10 +288,7 @@ end
 desc 'Clean build artifacts'
 task :clean do
   FileUtils.rm_f(Dir.glob('*.gem'))
-  FileUtils.rm_rf('lib/rdkit_chem/3.0')
-  FileUtils.rm_rf('lib/rdkit_chem/3.1')
-  FileUtils.rm_rf('lib/rdkit_chem/3.2')
-  FileUtils.rm_rf('lib/rdkit_chem/3.3')
+  Rake::Task['clean_staged'].invoke
 end
 
 task default: :test

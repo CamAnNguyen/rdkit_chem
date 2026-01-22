@@ -79,25 +79,19 @@ jobs:
         run: |
           rake repair
       
-      - name: Build native gem
+      - name: Stage native libraries
         run: |
-          rake build_native
+          rake stage_native
 
-      - name: Validate gem artifact
-        run: |
-          ls -la *.gem
-          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
-          sha256sum *.gem
-      
       - name: Test native loading
         run: |
           rake test_native
       
-      - name: Upload gem artifact
+      - name: Upload staged libraries
         uses: actions/upload-artifact@v4
         with:
-          name: gem-x86_64-linux-ruby${{ matrix.ruby }}
-          path: '*.gem'
+          name: staged-x86_64-linux-ruby${{ matrix.ruby }}
+          path: 'lib/rdkit_chem/${{ matrix.ruby }}.0'
           if-no-files-found: error
 
   build-macos:
@@ -141,26 +135,129 @@ jobs:
         run: |
           rake repair_macos || rake fix_rpath
       
-      - name: Build native gem
+      - name: Stage native libraries
         run: |
-          rake build_native
+          rake stage_native
+      
+      - name: Upload staged libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: staged-${{ matrix.arch }}-ruby${{ matrix.ruby }}
+          path: 'lib/rdkit_chem/${{ matrix.ruby }}.0'
+          if-no-files-found: error
+
+  package-linux:
+    name: Package Linux Fat Gem
+    needs: build-linux
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      
+      - name: Download all Linux staged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: staged-x86_64-linux-ruby*
+          path: lib/rdkit_chem
+          merge-multiple: false
+      
+      - name: Reorganize staged directories
+        run: |
+          # download-artifact creates subdirectories, we need to flatten
+          cd lib/rdkit_chem
+          for dir in staged-x86_64-linux-ruby*/; do
+            ruby_ver=$(echo "$dir" | sed 's/staged-x86_64-linux-ruby\([0-9.]*\)\//\1.0/')
+            if [ -d "$dir" ]; then
+              # The artifact contains the X.Y.0 directory inside
+              if [ -d "$dir/$ruby_ver" ]; then
+                mv "$dir/$ruby_ver" "./$ruby_ver"
+              else
+                # Or the files are directly in the artifact dir
+                mkdir -p "./$ruby_ver"
+                mv "$dir"/* "./$ruby_ver/" 2>/dev/null || true
+              fi
+              rmdir "$dir" 2>/dev/null || rm -rf "$dir"
+            fi
+          done
+          ls -la
+      
+      - name: Build fat gem
+        run: |
+          rake build_fat_gem
 
       - name: Validate gem artifact
         run: |
           ls -la *.gem
-          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| Gem::Package.new(gem).spec }"
-          shasum -a 256 *.gem
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| puts Gem::Package.new(gem).spec.files.select { |f| f.include?('rdkit_chem/3') } }"
+          sha256sum *.gem
       
-      - name: Upload gem artifact
+      - name: Upload fat gem
         uses: actions/upload-artifact@v4
         with:
-          name: gem-${{ matrix.arch }}-ruby${{ matrix.ruby }}
+          name: gem-x86_64-linux
+          path: '*.gem'
+          if-no-files-found: error
+
+  package-macos:
+    name: Package macOS Fat Gem
+    needs: build-macos
+    runs-on: macos-15
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      
+      - name: Download all macOS staged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: staged-arm64-darwin-ruby*
+          path: lib/rdkit_chem
+          merge-multiple: false
+      
+      - name: Reorganize staged directories
+        run: |
+          cd lib/rdkit_chem
+          for dir in staged-arm64-darwin-ruby*/; do
+            ruby_ver=$(echo "$dir" | sed 's/staged-arm64-darwin-ruby\([0-9.]*\)\//\1.0/')
+            if [ -d "$dir" ]; then
+              if [ -d "$dir/$ruby_ver" ]; then
+                mv "$dir/$ruby_ver" "./$ruby_ver"
+              else
+                mkdir -p "./$ruby_ver"
+                mv "$dir"/* "./$ruby_ver/" 2>/dev/null || true
+              fi
+              rmdir "$dir" 2>/dev/null || rm -rf "$dir"
+            fi
+          done
+          ls -la
+      
+      - name: Build fat gem
+        run: |
+          rake build_fat_gem
+
+      - name: Validate gem artifact
+        run: |
+          ls -la *.gem
+          ruby -e "require 'rubygems/package'; Dir['*.gem'].each { |gem| puts Gem::Package.new(gem).spec.files.select { |f| f.include?('rdkit_chem/3') } }"
+          shasum -a 256 *.gem
+      
+      - name: Upload fat gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-arm64-darwin
           path: '*.gem'
           if-no-files-found: error
 
   test-linux-container:
-    name: Test Fresh Container (Ruby ${{ matrix.ruby }})
-    needs: build-linux
+    name: Test Linux (Ruby ${{ matrix.ruby }})
+    needs: package-linux
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -172,10 +269,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download gem artifact
+      - name: Download fat gem
         uses: actions/download-artifact@v4
         with:
-          name: gem-x86_64-linux-ruby${{ matrix.ruby }}
+          name: gem-x86_64-linux
           path: artifacts
       
       - name: Install minimal runtime dependencies
@@ -211,7 +308,7 @@ jobs:
 
   test-macos:
     name: Test macOS (Ruby ${{ matrix.ruby }})
-    needs: build-macos
+    needs: package-macos
     runs-on: macos-15
     strategy:
       fail-fast: false
@@ -225,10 +322,10 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
       
-      - name: Download gem artifact
+      - name: Download fat gem
         uses: actions/download-artifact@v4
         with:
-          name: gem-arm64-darwin-ruby${{ matrix.ruby }}
+          name: gem-arm64-darwin
           path: artifacts
       
       - name: Install gem

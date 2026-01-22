@@ -2,5 +2,5 @@
 
 module RDKitChem
   VERSION = '2025.09.3'
-  GEMVERSION = "#{VERSION}.13"
+  GEMVERSION = "#{VERSION}.14"
 end
