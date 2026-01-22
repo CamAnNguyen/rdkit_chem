@@ -261,7 +261,7 @@ jobs:
     needs: [test-linux-container, test-macos]
     if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.skip_publish != 'true'
     runs-on: ubuntu-latest
-    environment: rubygems
+    environment: master
     
     steps:
       - uses: actions/checkout@v4
@@ -274,26 +274,36 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: gem-*
-          merge-multiple: true
+          path: artifacts
       
-      - name: Build source gem
+      - name: Collect and verify gems
         run: |
+          # Move all gems from subdirectories to current directory
+          find artifacts -name '*.gem' -exec mv {} . \;
+          
+          # Build source gem
           gem build rdkit_chem.gemspec
-      
-      - name: List gems to publish
-        run: |
-          echo "Gems to publish:"
+          
+          echo "=== Gems to publish ==="
           ls -la *.gem
-      
-      - name: Setup RubyGems credentials
-        run: |
-          mkdir -p ~/.gem
-          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" > ~/.gem/credentials
-          chmod 600 ~/.gem/credentials
+          
+          echo "=== Verifying gem integrity ==="
+          for gem in *.gem; do
+            echo "Checking $gem..."
+            if ruby -e "require 'rubygems/package'; Gem::Package.new('$gem').verify" 2>/dev/null; then
+              echo "  OK"
+            else
+              echo "  CORRUPTED - will skip"
+              mv "$gem" "$gem.corrupted"
+            fi
+          done
       
       - name: Publish gems
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
         run: |
           for gem in *.gem; do
+            [ -f "$gem" ] || continue
             echo "Publishing $gem..."
             gem push "$gem" || echo "Failed to push $gem (may already exist)"
           done
