@@ -63,7 +63,7 @@ Dir.chdir build_dir do
           "-DCMAKE_INSTALL_PREFIX=#{install_dir} " \
           '-DCMAKE_BUILD_TYPE=Release -DRDK_BUILD_PYTHON_WRAPPERS=OFF ' \
           '-DRDK_BUILD_SWIG_WRAPPERS=ON -DRDK_BUILD_INCHI_SUPPORT=OFF ' \
-          '-DBoost_NO_BOOST_CMAKE=ON'
+          '-DBoost_NO_BOOST_CMAKE=ON -DRDK_USE_BOOST_IOSTREAMS=OFF'
   run_command(cmake, 'Configuring RDKit')
 end
 
